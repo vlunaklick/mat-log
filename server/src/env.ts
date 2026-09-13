@@ -17,6 +17,7 @@ const schema = z.object({
   /** Extra origins allowed to sign in, comma separated (e.g. a Tailscale https name). */
   TRUSTED_ORIGINS: z.string().optional(),
   GOOGLE_GENERATIVE_AI_API_KEY: z.string().min(10),
+  OPENROUTER_API_KEY: z.string().trim().optional(),
   COACH_MODEL: z.string().default("gemini-3.5-flash"),
   /** Only honoured outside production: lets scripts/create-user.ts sign up the single user. */
   BOOTSTRAP: z.string().optional(),

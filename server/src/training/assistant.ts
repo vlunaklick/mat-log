@@ -10,6 +10,7 @@ import { z } from "zod";
 import { db, schema, eq, and, desc, sql } from "../db/index.ts";
 import { env } from "../env.ts";
 import { coachOutputSchema, coachGenerationSchema } from "./coach-output.ts";
+import { createFreeCoachFallback, withCoachFallback } from "./coach-fallback.ts";
 export { coachOutputSchema } from "./coach-output.ts";
 import { getState } from "./store.ts";
 import { searchCatalog, catalogSources } from "./catalog.ts";
@@ -101,118 +102,123 @@ export async function respond(
     createGoogleGenerativeAI({ apiKey: env.GOOGLE_GENERATIVE_AI_API_KEY })(
       env.COACH_MODEL,
     );
-  const { output } = await generateText({
-    model,
-    output: Output.object({ schema: coachGenerationSchema }),
-    stopWhen: stepCountIs(7),
-    maxOutputTokens: 12000,
-    abortSignal: AbortSignal.timeout(120000),
-    maxRetries: 1,
-    system: `${COACH_SYSTEM}\nFecha local: ${localDate}. Intención de entrada: ${instruction}\nPerfil, objetivos y gameplans confirmados:\n${JSON.stringify(state)}\nResumen confirmado:\n${buildCoachSummary(sessionRows.map(sessionToApi), techniqueRows.map(techniqueToApi), { weeklyGoalSessions: 3, beltStartDate: state.profile.startedOn ?? undefined })}\nBiblioteca (IDs personales):\n${JSON.stringify(techniqueRows.map((t) => ({ id: t.id, name: t.name, archived: t.archived })).slice(0, 1000))}\nBorrador seleccionado, NO confirmado:\n${JSON.stringify(selected)}\nOtros borradores NO confirmados:\n${JSON.stringify(draftRows.map((d) => ({ id: d.id, topic: d.data.classTopic, date: d.data.date })))}\nFuentes:\n${JSON.stringify(catalogSources)}`,
-    messages: history
-      .reverse()
-      .map((m) => ({ role: m.role, content: m.content })),
-    tools: {
-      searchHistory: tool({
-        description:
-          "Busca mensajes en todos los chats del usuario, sin límite de antigüedad. Query vacía permite explorar cronológicamente. Devuelve 20 resultados por página.",
-        inputSchema: z.object({
-          query: z.string().max(200),
-          offset: z.number().int().min(0),
+  const fallback = modelOverride ? undefined : createFreeCoachFallback(env.OPENROUTER_API_KEY);
+  const output = await withCoachFallback(async (model, abortSignal) => {
+    const { output } = await generateText({
+      model,
+      output: Output.object({ schema: coachGenerationSchema }),
+      stopWhen: stepCountIs(7),
+      maxOutputTokens: 12000,
+      abortSignal,
+      maxRetries: fallback ? 0 : 1,
+      system: `${COACH_SYSTEM}\nFecha local: ${localDate}. Intención de entrada: ${instruction}\nPerfil, objetivos y gameplans confirmados:\n${JSON.stringify(state)}\nResumen confirmado:\n${buildCoachSummary(sessionRows.map(sessionToApi), techniqueRows.map(techniqueToApi), { weeklyGoalSessions: 3, beltStartDate: state.profile.startedOn ?? undefined })}\nBiblioteca (IDs personales):\n${JSON.stringify(techniqueRows.map((t) => ({ id: t.id, name: t.name, archived: t.archived })).slice(0, 1000))}\nBorrador seleccionado, NO confirmado:\n${JSON.stringify(selected)}\nOtros borradores NO confirmados:\n${JSON.stringify(draftRows.map((d) => ({ id: d.id, topic: d.data.classTopic, date: d.data.date })))}\nFuentes:\n${JSON.stringify(catalogSources)}`,
+      messages: history
+        .slice()
+        .reverse()
+        .map((m) => ({ role: m.role, content: m.content })),
+      tools: {
+        searchHistory: tool({
+          description:
+            "Busca mensajes en todos los chats del usuario, sin límite de antigüedad. Query vacía permite explorar cronológicamente. Devuelve 20 resultados por página.",
+          inputSchema: z.object({
+            query: z.string().max(200),
+            offset: z.number().int().min(0),
+          }),
+          execute: async ({ query, offset }) => {
+            const rows = await db
+              .select({
+                id: schema.chatMessages.id,
+                conversationId: schema.chatMessages.conversationId,
+                role: schema.chatMessages.role,
+                content: schema.chatMessages.content,
+                createdAt: schema.chatMessages.createdAt,
+              })
+              .from(schema.chatMessages)
+              .where(
+                and(
+                  eq(schema.chatMessages.userId, userId),
+                  query
+                    ? sql`to_tsvector('simple', ${schema.chatMessages.content}) @@ websearch_to_tsquery('simple', ${query})`
+                    : undefined,
+                ),
+              )
+              .orderBy(
+                desc(schema.chatMessages.createdAt),
+                desc(schema.chatMessages.id),
+              )
+              .offset(offset)
+              .limit(21);
+            return {
+              messages: rows
+                .slice(0, 20)
+                .map((r) => ({ ...r, content: r.content.slice(0, 4000) })),
+              nextOffset: rows.length > 20 ? offset + 20 : null,
+            };
+          },
         }),
-        execute: async ({ query, offset }) => {
-          const rows = await db
-            .select({
-              id: schema.chatMessages.id,
-              conversationId: schema.chatMessages.conversationId,
-              role: schema.chatMessages.role,
-              content: schema.chatMessages.content,
-              createdAt: schema.chatMessages.createdAt,
-            })
-            .from(schema.chatMessages)
-            .where(
-              and(
-                eq(schema.chatMessages.userId, userId),
-                query
-                  ? sql`to_tsvector('simple', ${schema.chatMessages.content}) @@ websearch_to_tsquery('simple', ${query})`
-                  : undefined,
-              ),
-            )
-            .orderBy(
-              desc(schema.chatMessages.createdAt),
-              desc(schema.chatMessages.id),
-            )
-            .offset(offset)
-            .limit(21);
-          return {
-            messages: rows
-              .slice(0, 20)
-              .map((r) => ({ ...r, content: r.content.slice(0, 4000) })),
-            nextOffset: rows.length > 20 ? offset + 20 : null,
-          };
-        },
-      }),
-      readConversation: tool({
-        description: "Lee mensajes completos de un chat propio. 30 por página.",
-        inputSchema: z.object({
-          id: z.string(),
-          offset: z.number().int().min(0),
+        readConversation: tool({
+          description: "Lee mensajes completos de un chat propio. 30 por página.",
+          inputSchema: z.object({
+            id: z.string(),
+            offset: z.number().int().min(0),
+          }),
+          execute: async ({ id, offset }) =>
+            db
+              .select({
+                role: schema.chatMessages.role,
+                content: schema.chatMessages.content,
+                createdAt: schema.chatMessages.createdAt,
+              })
+              .from(schema.chatMessages)
+              .where(
+                and(
+                  eq(schema.chatMessages.userId, userId),
+                  eq(schema.chatMessages.conversationId, id),
+                ),
+              )
+              .orderBy(schema.chatMessages.createdAt, schema.chatMessages.id)
+              .offset(offset)
+              .limit(30),
         }),
-        execute: async ({ id, offset }) =>
-          db
-            .select({
-              role: schema.chatMessages.role,
-              content: schema.chatMessages.content,
-              createdAt: schema.chatMessages.createdAt,
-            })
-            .from(schema.chatMessages)
-            .where(
-              and(
-                eq(schema.chatMessages.userId, userId),
-                eq(schema.chatMessages.conversationId, id),
-              ),
-            )
-            .orderBy(schema.chatMessages.createdAt, schema.chatMessages.id)
-            .offset(offset)
-            .limit(30),
-      }),
-      searchSessions: tool({
-        description:
-          "Consulta clases CONFIRMADAS de cualquier fecha, incluidas notas y evidencia de técnicas. Query vacía devuelve las más recientes.",
-        inputSchema: z.object({
-          query: z.string().max(200),
-          offset: z.number().int().min(0),
+        searchSessions: tool({
+          description:
+            "Consulta clases CONFIRMADAS de cualquier fecha, incluidas notas y evidencia de técnicas. Query vacía devuelve las más recientes.",
+          inputSchema: z.object({
+            query: z.string().max(200),
+            offset: z.number().int().min(0),
+          }),
+          execute: async ({ query, offset }) =>
+            db
+              .select()
+              .from(schema.trainingSessions)
+              .where(
+                and(
+                  eq(schema.trainingSessions.userId, userId),
+                  query
+                    ? sql`to_tsvector('simple', ${schema.trainingSessions.classTopic} || ' ' || ${schema.trainingSessions.whatWorked} || ' ' || ${schema.trainingSessions.whatFailed} || ' ' || ${schema.trainingSessions.nextFocus} || ' ' || ${schema.trainingSessions.date}) @@ websearch_to_tsquery('simple', ${query})`
+                    : undefined,
+                ),
+              )
+              .orderBy(desc(schema.trainingSessions.date))
+              .offset(offset)
+              .limit(20),
         }),
-        execute: async ({ query, offset }) =>
-          db
-            .select()
-            .from(schema.trainingSessions)
-            .where(
-              and(
-                eq(schema.trainingSessions.userId, userId),
-                query
-                  ? sql`to_tsvector('simple', ${schema.trainingSessions.classTopic} || ' ' || ${schema.trainingSessions.whatWorked} || ' ' || ${schema.trainingSessions.whatFailed} || ' ' || ${schema.trainingSessions.nextFocus} || ' ' || ${schema.trainingSessions.date}) @@ websearch_to_tsquery('simple', ${query})`
-                  : undefined,
-              ),
-            )
-            .orderBy(desc(schema.trainingSessions.date))
-            .offset(offset)
-            .limit(20),
-      }),
-      searchCatalog: tool({
-        description:
-          "Busca nombres, variantes, aliases y referencias de técnicas/posiciones. Usá palabras clave cortas en español o inglés, probá alternativas si no hay resultados.",
-        inputSchema: z.object({
-          query: z.string().max(200),
-          style: z.enum(["gi", "nogi", "all"]),
+        searchCatalog: tool({
+          description:
+            "Busca nombres, variantes, aliases y referencias de técnicas/posiciones. Usá palabras clave cortas en español o inglés, probá alternativas si no hay resultados.",
+          inputSchema: z.object({
+            query: z.string().max(200),
+            style: z.enum(["gi", "nogi", "all"]),
+          }),
+          execute: async ({ query, style }) =>
+            searchCatalog(query, style, "all", 0, 12),
         }),
-        execute: async ({ query, style }) =>
-          searchCatalog(query, style, "all", 0, 12),
-      }),
-    },
-  });
+      },
+    });
+    return coachOutputSchema.parse(output);
+  }, model, fallback);
   return {
-    output: coachOutputSchema.parse(output),
+    output,
     baseRevision: state.revision,
     selectedDraft: selected,
   };

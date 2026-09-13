@@ -26,6 +26,7 @@ services:
     restart: unless-stopped
     environment:
       GOOGLE_GENERATIVE_AI_API_KEY: ${GOOGLE_GENERATIVE_AI_API_KEY}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
       NODE_ENV: production
       PORT: "3000"
