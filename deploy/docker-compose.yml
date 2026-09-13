@@ -1,47 +1,36 @@
-# Mat Log on the apps VPS (bjj.vmoon.tech). Lives in /opt/bjj together with a
-# gitignored .env holding the secrets. Deploy with ./deploy.sh from the repo.
-name: bjj
+# Managed in Coolify: bjj / production / mat-log.
+# Coolify prefixes bjj_pg_data with the service UUID. Data migrated from bjj_bjj_pg_data.
 services:
   web:
     image: nginx:1.27-alpine
-    container_name: bjj-web
     restart: unless-stopped
     # Loopback-only port for `tailscale serve` on the host (private access without public DNS).
     ports:
       - "127.0.0.1:8090:80"
     volumes:
-      - /opt/bjj/dist:/usr/share/nginx/html:ro
-      - /opt/bjj/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /data/coolify/services/peohorsmczbc4vvmhczqtxz7/dist:/usr/share/nginx/html:ro
+      - /data/coolify/services/peohorsmczbc4vvmhczqtxz7/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       api:
         condition: service_healthy
-    networks: [coolify, internal]
-    labels:
-      - traefik.enable=true
-      - traefik.docker.network=coolify
-      - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
-      - traefik.http.middlewares.gzip.compress=true
-      - traefik.http.routers.bjj-http.entrypoints=http
-      - traefik.http.routers.bjj-http.rule=Host(`bjj.vmoon.tech`)
-      - traefik.http.routers.bjj-http.middlewares=redirect-to-https
-      - traefik.http.routers.bjj-https.entrypoints=https
-      - traefik.http.routers.bjj-https.rule=Host(`bjj.vmoon.tech`)
-      - traefik.http.routers.bjj-https.tls=true
-      - traefik.http.routers.bjj-https.tls.certresolver=letsencrypt
-      - traefik.http.routers.bjj-https.middlewares=gzip
-      - traefik.http.services.bjj.loadbalancer.server.port=80
+    networks: [default, internal]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
 
   api:
     build:
-      context: /opt/bjj/app
+      context: /data/coolify/services/peohorsmczbc4vvmhczqtxz7/app
       dockerfile: server/Dockerfile
-    container_name: bjj-api
     restart: unless-stopped
-    env_file: /opt/bjj/.env
     environment:
+      GOOGLE_GENERATIVE_AI_API_KEY: ${GOOGLE_GENERATIVE_AI_API_KEY}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
       NODE_ENV: production
       PORT: "3000"
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@db:5432/matlog
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/matlog
       BETTER_AUTH_URL: https://bjj.vmoon.tech
     depends_on:
       db:
@@ -56,12 +45,11 @@ services:
 
   db:
     image: postgres:18-alpine
-    container_name: bjj-db
     restart: unless-stopped
     environment:
       POSTGRES_DB: matlog
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - bjj_pg_data:/var/lib/postgresql
     healthcheck:
@@ -75,6 +63,5 @@ volumes:
   bjj_pg_data:
 
 networks:
-  coolify:
-    external: true
+  default:
   internal:
