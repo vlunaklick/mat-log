@@ -1,0 +1,3 @@
+CREATE UNIQUE INDEX "chat_message_request_idx" ON "chat_message" USING btree ("user_id","request_id","role") WHERE "chat_message"."request_id" is not null;--> statement-breakpoint
+CREATE INDEX "chat_message_search_idx" ON "chat_message" USING gin (to_tsvector('simple', "content"));--> statement-breakpoint
+CREATE INDEX "training_session_search_idx" ON "training_session" USING gin (to_tsvector('simple', "class_topic" || ' ' || "what_worked" || ' ' || "what_failed" || ' ' || "next_focus" || ' ' || "date"));

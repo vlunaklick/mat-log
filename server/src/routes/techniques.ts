@@ -6,7 +6,6 @@ import { and, asc, eq } from "../db/index.ts";
 import { db, schema } from "../db/index.ts";
 import type { AppEnv } from "../middleware.ts";
 
-
 const techniqueSchema = z.object({
   name: z.string().min(1),
   archived: z.boolean().optional(),
@@ -55,12 +54,20 @@ export const techniquesRoute = new Hono<AppEnv>()
   })
   .post("/", async (c) => {
     const userId = c.get("userId");
-    const parsed = techniqueSchema.safeParse(await c.req.json().catch(() => null));
+    const parsed = techniqueSchema.safeParse(
+      await c.req.json().catch(() => null),
+    );
     if (!parsed.success) return c.json({ error: parsed.error.message }, 400);
     const now = Date.now();
     const [row] = await db
       .insert(schema.techniques)
-      .values({ ...parsed.data, userId, createdAt: now, updatedAt: now, ...newCardFields() })
+      .values({
+        ...parsed.data,
+        userId,
+        createdAt: now,
+        updatedAt: now,
+        ...newCardFields(),
+      })
       .returning();
     return c.json(techniqueToApi(row), 201);
   })
@@ -68,12 +75,16 @@ export const techniquesRoute = new Hono<AppEnv>()
     const userId = c.get("userId");
     const id = Number(c.req.param("id"));
     if (!Number.isInteger(id)) return c.json({ error: "invalid id" }, 400);
-    const parsed = techniqueSchema.safeParse(await c.req.json().catch(() => null));
+    const parsed = techniqueSchema.safeParse(
+      await c.req.json().catch(() => null),
+    );
     if (!parsed.success) return c.json({ error: parsed.error.message }, 400);
     const [row] = await db
       .update(schema.techniques)
       .set({ ...parsed.data, updatedAt: Date.now() })
-      .where(and(eq(schema.techniques.id, id), eq(schema.techniques.userId, userId)))
+      .where(
+        and(eq(schema.techniques.id, id), eq(schema.techniques.userId, userId)),
+      )
       .returning();
     if (!row) return c.json({ error: "not found" }, 404);
     return c.json(techniqueToApi(row));
@@ -82,13 +93,73 @@ export const techniquesRoute = new Hono<AppEnv>()
     const userId = c.get("userId");
     const id = Number(c.req.param("id"));
     if (!Number.isInteger(id)) return c.json({ error: "invalid id" }, 400);
-    await db.transaction(async tx => {
-      const [state] = await tx.select().from(schema.trainingState).where(eq(schema.trainingState.userId, userId)).for('update');
-      const [row] = await tx.delete(schema.techniques).where(and(eq(schema.techniques.id, id), eq(schema.techniques.userId, userId))).returning();
+    await db.transaction(async (tx) => {
+      const [state] = await tx
+        .select()
+        .from(schema.trainingState)
+        .where(eq(schema.trainingState.userId, userId))
+        .for("update");
+      const [row] = await tx
+        .delete(schema.techniques)
+        .where(
+          and(
+            eq(schema.techniques.id, id),
+            eq(schema.techniques.userId, userId),
+          ),
+        )
+        .returning();
       if (!row) return;
-      const sessions = await tx.select().from(schema.trainingSessions).where(eq(schema.trainingSessions.userId, userId));
-      for (const s of sessions) if (s.techniqueIds.includes(id)) await tx.update(schema.trainingSessions).set({ techniqueIds:s.techniqueIds.filter(t => t !== id),evidence:s.evidence.filter(e => e.techniqueId !== id) }).where(eq(schema.trainingSessions.id,s.id));
-      if (state) await tx.update(schema.trainingState).set({ revision:state.revision+1, gameplans:state.gameplans.map(p => ({ ...p,nodes:p.nodes.map(n => n.techniqueId === id ? { ...n,techniqueId:null } : n) })) }).where(eq(schema.trainingState.userId,userId));
+      const sessions = await tx
+        .select()
+        .from(schema.trainingSessions)
+        .where(eq(schema.trainingSessions.userId, userId));
+      for (const s of sessions)
+        if (s.techniqueIds.includes(id))
+          await tx
+            .update(schema.trainingSessions)
+            .set({
+              techniqueIds: s.techniqueIds.filter((t) => t !== id),
+              evidence: s.evidence.filter((e) => e.techniqueId !== id),
+            })
+            .where(eq(schema.trainingSessions.id, s.id));
+      const proposals = await tx
+        .select()
+        .from(schema.proposals)
+        .where(eq(schema.proposals.userId, userId));
+      for (const p of proposals)
+        if (
+          p.payload.kind === "gameplan" &&
+          p.payload.data.nodes.some((n) => n.techniqueId === id)
+        ) {
+          await tx
+            .update(schema.proposals)
+            .set({
+              payload: {
+                kind: "gameplan",
+                data: {
+                  ...p.payload.data,
+                  nodes: p.payload.data.nodes.map((n) =>
+                    n.techniqueId === id ? { ...n, techniqueId: null } : n,
+                  ),
+                },
+              },
+              status: p.status === "pending" ? "dismissed" : p.status,
+            })
+            .where(eq(schema.proposals.id, p.id));
+        }
+      if (state)
+        await tx
+          .update(schema.trainingState)
+          .set({
+            revision: state.revision + 1,
+            gameplans: state.gameplans.map((p) => ({
+              ...p,
+              nodes: p.nodes.map((n) =>
+                n.techniqueId === id ? { ...n, techniqueId: null } : n,
+              ),
+            })),
+          })
+          .where(eq(schema.trainingState.userId, userId));
     });
     return c.body(null, 204);
   })
@@ -102,7 +173,9 @@ export const techniquesRoute = new Hono<AppEnv>()
     const [existing] = await db
       .select()
       .from(schema.techniques)
-      .where(and(eq(schema.techniques.id, id), eq(schema.techniques.userId, userId)))
+      .where(
+        and(eq(schema.techniques.id, id), eq(schema.techniques.userId, userId)),
+      )
       .limit(1);
     if (!existing) return c.json({ error: "not found" }, 404);
 
@@ -110,7 +183,9 @@ export const techniquesRoute = new Hono<AppEnv>()
     const [row] = await db
       .update(schema.techniques)
       .set(next)
-      .where(and(eq(schema.techniques.id, id), eq(schema.techniques.userId, userId)))
+      .where(
+        and(eq(schema.techniques.id, id), eq(schema.techniques.userId, userId)),
+      )
       .returning();
     return c.json(techniqueToApi(row));
   });

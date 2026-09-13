@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from "react";
 const MAX_BYTES = 15 * 1024 * 1024;
 /** Own the browser microphone lifecycle, including navigation, permission errors and recording limits. */
 export function useAudio(onText: (text: string) => void) {
@@ -14,46 +14,106 @@ export function useAudio(onText: (text: string) => void) {
     mounted.current = true;
     return () => {
       mounted.current = false;
-      if (recorder.current?.state === 'recording') recorder.current.stop();
-      stream.current?.getTracks().forEach(t => t.stop());
+      if (recorder.current?.state === "recording") recorder.current.stop();
+      stream.current?.getTracks().forEach((t) => t.stop());
       if (timer.current) clearTimeout(timer.current);
     };
   }, []);
   async function transcribe(blob: Blob) {
-    setError(null); setAudio(blob);
-    if (!blob.size || blob.size > MAX_BYTES) { setError('Usá un audio de hasta 15 MB.'); return; }
+    setError(null);
+    setAudio(blob);
+    if (!blob.size || blob.size > MAX_BYTES) {
+      setError("Usá un audio de hasta 15 MB.");
+      return;
+    }
     setBusy(true);
     try {
-      const form = new FormData(); form.append('audio', blob, 'training-audio');
-      const response = await fetch('/api/audio', { method: 'POST', credentials: 'include', body: form, signal: AbortSignal.timeout(100000) });
+      const form = new FormData();
+      form.append("audio", blob, "training-audio");
+      const response = await fetch("/api/audio", {
+        method: "POST",
+        credentials: "include",
+        body: form,
+        signal: AbortSignal.timeout(100000),
+      });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? 'No pudimos transcribir el audio.');
+      if (!response.ok)
+        throw new Error(data.error ?? "No pudimos transcribir el audio.");
       if (mounted.current) onText(data.text);
-    } catch (e) { if (mounted.current) setError(e instanceof Error ? e.message : String(e)); }
-    finally { if (mounted.current) setBusy(false); }
+    } catch (e) {
+      if (mounted.current) setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      if (mounted.current) setBusy(false);
+    }
   }
   async function start() {
-    setError(null); setBusy(true);
+    setError(null);
+    setBusy(true);
     try {
-      if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') throw new Error('Este navegador no permite grabar. Podés adjuntar un audio o escribir.');
+      if (
+        !navigator.mediaDevices?.getUserMedia ||
+        typeof MediaRecorder === "undefined"
+      )
+        throw new Error(
+          "Este navegador no permite grabar. Podés adjuntar un audio o escribir.",
+        );
       const media = await navigator.mediaDevices.getUserMedia({ audio: true });
-      if (!mounted.current) { media.getTracks().forEach(t => t.stop()); return; }
+      if (!mounted.current) {
+        media.getTracks().forEach((t) => t.stop());
+        return;
+      }
       stream.current = media;
-      const mimeType = ['audio/webm;codecs=opus','audio/mp4','audio/ogg;codecs=opus'].find(t => MediaRecorder.isTypeSupported(t));
+      const mimeType = [
+        "audio/webm;codecs=opus",
+        "audio/mp4",
+        "audio/ogg;codecs=opus",
+      ].find((t) => MediaRecorder.isTypeSupported(t));
       const rec = new MediaRecorder(media, mimeType ? { mimeType } : undefined);
       recorder.current = rec;
-      const chunks: Blob[] = []; let bytes = 0;
-      rec.ondataavailable = e => { if (e.data.size) { chunks.push(e.data); bytes += e.data.size; if (bytes > MAX_BYTES && rec.state === 'recording') rec.stop(); } };
-      rec.onstop = () => {
-        media.getTracks().forEach(t => t.stop());
-        if (timer.current) clearTimeout(timer.current);
-        if (mounted.current) { setRecording(false); void transcribe(new Blob(chunks, { type: rec.mimeType })); }
+      const chunks: Blob[] = [];
+      let bytes = 0;
+      rec.ondataavailable = (e) => {
+        if (e.data.size) {
+          chunks.push(e.data);
+          bytes += e.data.size;
+          if (bytes > MAX_BYTES && rec.state === "recording") rec.stop();
+        }
       };
-      rec.onerror = () => { media.getTracks().forEach(t => t.stop()); setError('La grabación se interrumpió.'); setRecording(false); };
-      rec.start(1000); setRecording(true);
-      timer.current = setTimeout(() => { if (rec.state === 'recording') rec.stop(); }, 5 * 60 * 1000);
-    } catch (e) { stream.current?.getTracks().forEach(t => t.stop()); setError(e instanceof Error ? e.message : String(e)); }
-    finally { if (mounted.current) setBusy(false); }
+      rec.onstop = () => {
+        media.getTracks().forEach((t) => t.stop());
+        if (timer.current) clearTimeout(timer.current);
+        if (mounted.current) {
+          setRecording(false);
+          void transcribe(new Blob(chunks, { type: rec.mimeType }));
+        }
+      };
+      rec.onerror = () => {
+        media.getTracks().forEach((t) => t.stop());
+        setError("La grabación se interrumpió.");
+        setRecording(false);
+      };
+      rec.start(1000);
+      setRecording(true);
+      timer.current = setTimeout(
+        () => {
+          if (rec.state === "recording") rec.stop();
+        },
+        5 * 60 * 1000,
+      );
+    } catch (e) {
+      stream.current?.getTracks().forEach((t) => t.stop());
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      if (mounted.current) setBusy(false);
+    }
   }
-  return { recording, busy, error, start, stop: () => recorder.current?.stop(), transcribe, retry: audio ? () => transcribe(audio) : null };
+  return {
+    recording,
+    busy,
+    error,
+    start,
+    stop: () => recorder.current?.stop(),
+    transcribe,
+    retry: audio ? () => transcribe(audio) : null,
+  };
 }

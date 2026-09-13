@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, streamCoach } from "./api";
+import { api } from "./api";
 import type { Grade } from "./srs";
-import type { ChatMessage, Session, Settings, Technique } from "./types";
+import type { Session, Settings, Technique } from "./types";
 
 // ---------- Sessions ----------
 
@@ -82,19 +82,3 @@ export function useUpdateSettings() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["settings"] }),
   });
 }
-
-// ---------- Coach / chat ----------
-
-export function useChat() {
-  return useQuery({ queryKey: ["chat"], queryFn: () => api.get<ChatMessage[]>("/api/chat") });
-}
-
-export function useClearChat() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: () => api.del<void>("/api/chat"),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["chat"] }),
-  });
-}
-
-export { streamCoach };

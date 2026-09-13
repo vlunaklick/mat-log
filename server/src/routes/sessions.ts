@@ -1,4 +1,4 @@
-import { checkTechniqueIds } from "../training/store.ts";
+import { checkTechniqueIds, ensureState } from "../training/store.ts";
 import { dateSchema, stageSchema } from "../training/validation.ts";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -29,20 +29,50 @@ const rollSchema = z.object({
   notes: z.string().optional(),
 });
 
-const sessionSchema = z.object({
-  evidence: z.array(z.object({ techniqueId: z.number().int().positive(), stage: stageSchema, attempts: z.number().int().min(0).nullable(), successes: z.number().int().min(0).nullable(), notes: z.string() }).refine(e => e.attempts === null || e.successes === null || e.successes <= e.attempts)).optional(),
-  goalNotes: z.string().optional(),
-  date: dateSchema,
-  style: z.enum(["gi", "nogi"]).nullable(),
-  durationMin: z.number().int().nonnegative().nullable(),
-  classTopic: z.string(),
-  techniqueIds: z.array(z.number().int()),
-  rolls: z.array(rollSchema),
-  whatWorked: z.string(),
-  whatFailed: z.string(),
-  nextFocus: z.string(),
-  energy: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]).nullable(),
-});
+const sessionSchema = z
+  .object({
+    evidence: z
+      .array(
+        z
+          .object({
+            techniqueId: z.number().int().positive(),
+            stage: stageSchema,
+            attempts: z.number().int().min(0).nullable(),
+            successes: z.number().int().min(0).nullable(),
+            notes: z.string(),
+          })
+          .refine(
+            (e) =>
+              e.attempts === null ||
+              e.successes === null ||
+              e.successes <= e.attempts,
+          ),
+      )
+      .optional(),
+    goalNotes: z.string().optional(),
+    date: dateSchema,
+    style: z.enum(["gi", "nogi"]).nullable(),
+    durationMin: z.number().int().nonnegative().nullable(),
+    classTopic: z.string(),
+    techniqueIds: z.array(z.number().int()),
+    rolls: z.array(rollSchema),
+    whatWorked: z.string(),
+    whatFailed: z.string(),
+    nextFocus: z.string(),
+    energy: z
+      .union([
+        z.literal(1),
+        z.literal(2),
+        z.literal(3),
+        z.literal(4),
+        z.literal(5),
+      ])
+      .nullable(),
+  })
+  .refine(
+    (s) => !s.evidence?.some((e) => !s.techniqueIds.includes(e.techniqueId)),
+    "La evidencia debe corresponder a las técnicas de la clase.",
+  );
 
 export function sessionToApi(row: typeof schema.trainingSessions.$inferSelect) {
   return {
@@ -70,33 +100,75 @@ export const sessionsRoute = new Hono<AppEnv>()
       .select()
       .from(schema.trainingSessions)
       .where(eq(schema.trainingSessions.userId, userId))
-      .orderBy(desc(schema.trainingSessions.date), desc(schema.trainingSessions.createdAt));
+      .orderBy(
+        desc(schema.trainingSessions.date),
+        desc(schema.trainingSessions.createdAt),
+      );
     return c.json(rows.map(sessionToApi));
   })
   .post("/", async (c) => {
     const userId = c.get("userId");
-    const parsed = sessionSchema.safeParse(await c.req.json().catch(() => null));
+    const parsed = sessionSchema.safeParse(
+      await c.req.json().catch(() => null),
+    );
     if (!parsed.success) return c.json({ error: parsed.error.message }, 400);
-    await checkTechniqueIds(userId, [...parsed.data.techniqueIds, ...(parsed.data.evidence ?? []).map(e => e.techniqueId)]);
-    const [row] = await db
-      .insert(schema.trainingSessions)
-      .values({ ...parsed.data, userId, createdAt: Date.now() })
-      .returning();
+    const row = await db.transaction(async (tx) => {
+      await ensureState(userId, tx);
+      await tx
+        .select()
+        .from(schema.trainingState)
+        .where(eq(schema.trainingState.userId, userId))
+        .for("update");
+      await checkTechniqueIds(userId, parsed.data.techniqueIds, tx);
+      const [saved] = await tx
+        .insert(schema.trainingSessions)
+        .values({ ...parsed.data, userId, createdAt: Date.now() })
+        .returning();
+      return saved;
+    });
     return c.json(sessionToApi(row), 201);
   })
   .put("/:id", async (c) => {
     const userId = c.get("userId");
     const id = Number(c.req.param("id"));
     if (!Number.isInteger(id)) return c.json({ error: "invalid id" }, 400);
-    const parsed = sessionSchema.safeParse(await c.req.json().catch(() => null));
+    const parsed = sessionSchema.safeParse(
+      await c.req.json().catch(() => null),
+    );
     if (!parsed.success) return c.json({ error: parsed.error.message }, 400);
-    await checkTechniqueIds(userId, [...parsed.data.techniqueIds, ...(parsed.data.evidence ?? []).map(e => e.techniqueId)]);
-    if (parsed.data.evidence?.some(e => !parsed.data.techniqueIds.includes(e.techniqueId))) return c.json({ error: "La evidencia debe corresponder a las técnicas de la clase." }, 400);
-    const [row] = await db
-      .update(schema.trainingSessions)
-      .set(parsed.data)
-      .where(and(eq(schema.trainingSessions.id, id), eq(schema.trainingSessions.userId, userId)))
-      .returning();
+    const row = await db.transaction(async (tx) => {
+      await ensureState(userId, tx);
+      await tx
+        .select()
+        .from(schema.trainingState)
+        .where(eq(schema.trainingState.userId, userId))
+        .for("update");
+      await checkTechniqueIds(userId, parsed.data.techniqueIds, tx);
+      const [existing] = await tx
+        .select()
+        .from(schema.trainingSessions)
+        .where(
+          and(
+            eq(schema.trainingSessions.id, id),
+            eq(schema.trainingSessions.userId, userId),
+          ),
+        );
+      if (!existing) return null;
+      const evidence = (parsed.data.evidence ?? existing.evidence).filter((e) =>
+        parsed.data.techniqueIds.includes(e.techniqueId),
+      );
+      const [saved] = await tx
+        .update(schema.trainingSessions)
+        .set({ ...parsed.data, evidence })
+        .where(
+          and(
+            eq(schema.trainingSessions.id, id),
+            eq(schema.trainingSessions.userId, userId),
+          ),
+        )
+        .returning();
+      return saved;
+    });
     if (!row) return c.json({ error: "not found" }, 404);
     return c.json(sessionToApi(row));
   })
@@ -106,7 +178,12 @@ export const sessionsRoute = new Hono<AppEnv>()
     if (!Number.isInteger(id)) return c.json({ error: "invalid id" }, 400);
     const [row] = await db
       .delete(schema.trainingSessions)
-      .where(and(eq(schema.trainingSessions.id, id), eq(schema.trainingSessions.userId, userId)))
+      .where(
+        and(
+          eq(schema.trainingSessions.id, id),
+          eq(schema.trainingSessions.userId, userId),
+        ),
+      )
       .returning();
     if (!row) return c.json({ error: "not found" }, 404);
     return c.body(null, 204);

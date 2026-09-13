@@ -44,28 +44,3 @@ export const api = {
   put: <T>(path: string, body?: unknown) => request<T>(path, { method: "PUT", body: body !== undefined ? JSON.stringify(body) : undefined }),
   del: <T>(path: string) => request<T>(path, { method: "DELETE" }),
 };
-
-/** Streams the text/plain coach reply, invoking onChunk as bytes decode. */
-export async function streamCoach(message: string, onChunk: (text: string) => void): Promise<void> {
-  const res = await fetch("/api/coach", {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message }),
-  });
-
-  if (!res.ok) {
-    const message = await parseErrorMessage(res);
-    throw new ApiError(res.status, message);
-  }
-
-  const reader = res.body?.getReader();
-  if (!reader) return;
-  const decoder = new TextDecoder();
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    onChunk(decoder.decode(value, { stream: true }));
-  }
-}

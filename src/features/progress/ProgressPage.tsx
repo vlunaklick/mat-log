@@ -119,7 +119,7 @@ export default function ProgressPage() {
       <PageHeader title="Progress." lead="What the mat is telling you." />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile label="Mat hours" value={stats.hours.toFixed(1)} />
+        <StatTile label="Horas registradas" value={sessions?.some(s => s.durationMin !== null) ? stats.hours.toFixed(1) : "—"} hint={`${sessions?.filter(s => s.durationMin === null).length ?? 0} clases sin duración`} />
         <StatTile label="Sessions" value={stats.count} />
         <StatTile label="Week streak" value={stats.streak} highlight={stats.streak >= 2} />
         <StatTile label="Last 30 days" value={stats.last30} />

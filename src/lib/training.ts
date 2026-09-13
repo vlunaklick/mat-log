@@ -1,8 +1,12 @@
-import type { Position, Style, TechniqueType } from './types';
+import type { Position, Style, TechniqueType } from "./types";
 
-export type Stage = 'seen' | 'practiced' | 'applied';
-export const STAGE_LABELS: Record<Stage, string> = { seen: 'Vista en clase', practiced: 'Practicada', applied: 'Aplicada en roll' };
-export type Belt = 'white' | 'blue' | 'purple' | 'brown' | 'black';
+export type Stage = "seen" | "practiced" | "applied";
+export const STAGE_LABELS: Record<Stage, string> = {
+  seen: "Vista en clase",
+  practiced: "Practicada",
+  applied: "Aplicada en roll",
+};
+export type Belt = "white" | "blue" | "purple" | "brown" | "black";
 export interface Profile {
   startedOn: string | null;
   birthYear: number | null;
@@ -14,13 +18,23 @@ export interface Profile {
   belts: Array<{ belt: Belt; date: string }>;
   breaks: Array<{ start: string; end: string | null; reason: string }>;
 }
-export const EMPTY_PROFILE: Profile = { startedOn: null, birthYear: null, heightCm: null, weightKg: null, preferences: '', limitations: '', ambitions: '', belts: [], breaks: [] };
+export const EMPTY_PROFILE: Profile = {
+  startedOn: null,
+  birthYear: null,
+  heightCm: null,
+  weightKg: null,
+  preferences: "",
+  limitations: "",
+  ambitions: "",
+  belts: [],
+  breaks: [],
+};
 export interface Goal {
   id: string;
   style: Style;
   title: string;
   action: string;
-  status: 'active' | 'completed' | 'paused';
+  status: "active" | "completed" | "paused";
   notes: string;
 }
 export interface PlanNode {
@@ -29,7 +43,7 @@ export interface PlanNode {
   action: string;
   opponentResponse: string;
   next: string[];
-  status: 'learned' | 'suggested';
+  status: "learned" | "suggested";
   techniqueId: number | null;
   caution: string;
 }
@@ -46,7 +60,7 @@ export interface DraftTechnique {
   type: TechniqueType;
   stage: Stage;
   notes: string;
-  identification: 'confirmed' | 'tentative';
+  identification: "confirmed" | "tentative";
   catalogId: string | null;
   attempts: number | null;
   successes: number | null;
@@ -60,7 +74,13 @@ export interface DraftData {
   whatWorked: string;
   whatFailed: string;
   nextFocus: string;
-  rolls: Array<{ partnerName?: string; partnerBelt?: Belt; outcome: 'dominated' | 'won' | 'even' | 'lost' | 'survived' | 'unknown'; stuckIn?: Position; notes?: string }>;
+  rolls: Array<{
+    partnerName?: string;
+    partnerBelt?: Belt;
+    outcome: "dominated" | "won" | "even" | "lost" | "survived" | "unknown";
+    stuckIn?: Position;
+    notes?: string;
+  }>;
   techniques: DraftTechnique[];
   goalNotes: string;
 }
@@ -69,7 +89,7 @@ export interface Draft {
   sourceText: string;
   data: DraftData;
   questions: string[];
-  status: 'draft' | 'confirmed';
+  status: "draft" | "confirmed";
   sessionId: number | null;
   conversationId: string | null;
   revision: number;
@@ -77,16 +97,16 @@ export interface Draft {
   updatedAt: number;
 }
 export type ProposalPayload =
-  | { kind: 'profile'; data: Profile }
-  | { kind: 'goal'; data: Goal }
-  | { kind: 'gameplan'; data: Gameplan };
+  | { kind: "profile"; data: Profile }
+  | { kind: "goal"; data: Goal }
+  | { kind: "gameplan"; data: Gameplan };
 export interface Proposal {
   id: string;
   title: string;
   reason: string;
   payload: ProposalPayload;
   baseRevision: number;
-  status: 'pending' | 'accepted' | 'dismissed';
+  status: "pending" | "accepted" | "dismissed";
   conversationId: string | null;
   createdAt: number;
 }
@@ -96,42 +116,85 @@ export interface TrainingState {
   gameplans: Gameplan[];
   revision: number;
 }
-export interface Conversation { id: string; title: string; createdAt: number; updatedAt: number }
-export interface CoachMessage { id: number; conversationId: string | null; role: 'user' | 'assistant'; content: string; createdAt: number; requestId: string | null }
+export interface Conversation {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+}
+export interface CoachMessage {
+  id: number;
+  conversationId: string | null;
+  role: "user" | "assistant";
+  content: string;
+  createdAt: number;
+  requestId: string | null;
+}
 export interface CatalogEntry {
   id: string;
   name: string;
   aliases: string[];
   position: Position;
   type: TechniqueType;
-  style: Style | 'both';
+  style: Style | "both";
   description: string;
   tags: string[];
-  source: 'GrappleMap' | 'Mat Log';
+  source: "GrappleMap" | "Mat Log";
   sourceUrl: string;
   references: string[];
-  kind: 'position' | 'transition' | 'technique';
+  kind: "position" | "transition" | "technique";
 }
-export interface TechniqueEvidence { techniqueId: number; stage: Stage; attempts: number | null; successes: number | null; notes: string }
+export interface TechniqueEvidence {
+  techniqueId: number;
+  stage: Stage;
+  attempts: number | null;
+  successes: number | null;
+  notes: string;
+}
 
 /** Union of pause intervals: overlapping breaks are only subtracted once. End dates are exclusive. */
-export function trainingDays(profile: Profile, today: string): { elapsed: number; paused: number; active: number } | null {
+export function trainingDays(
+  profile: Profile,
+  today: string,
+): { elapsed: number; paused: number; active: number } | null {
   if (!profile.startedOn) return null;
   const day = (s: string) => Date.parse(`${s}T00:00:00Z`) / 86400000;
-  const start = day(profile.startedOn), end = day(today);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || start > end) return null;
-  const intervals = profile.breaks.map(b => [Math.max(start, day(b.start)), Math.min(end, day(b.end ?? today))])
-    .filter(([a, b]) => b > a).sort((a, b) => a[0] - b[0]);
-  let paused = 0, cursor = start;
-  for (const [a, b] of intervals) { paused += Math.max(0, b - Math.max(cursor, a)); cursor = Math.max(cursor, b); }
+  const start = day(profile.startedOn),
+    end = day(today);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start > end)
+    return null;
+  const intervals = profile.breaks
+    .map((b) => [
+      Math.max(start, day(b.start)),
+      Math.min(end, day(b.end ?? today)),
+    ])
+    .filter(([a, b]) => b > a)
+    .sort((a, b) => a[0] - b[0]);
+  let paused = 0,
+    cursor = start;
+  for (const [a, b] of intervals) {
+    paused += Math.max(0, b - Math.max(cursor, a));
+    cursor = Math.max(cursor, b);
+  }
   return { elapsed: end - start, paused, active: end - start - paused };
 }
 export function techniqueProgress(evidence: TechniqueEvidence[]): Stage {
-  return evidence.some(e => e.stage === 'applied') ? 'applied' : evidence.some(e => e.stage === 'practiced') ? 'practiced' : 'seen';
+  return evidence.some((e) => e.stage === "applied")
+    ? "applied"
+    : evidence.some((e) => e.stage === "practiced")
+      ? "practiced"
+      : "seen";
 }
 export function practiceTotals(evidence: TechniqueEvidence[]) {
-  const measured = evidence.filter(e => e.attempts !== null && e.successes !== null);
+  const measured = evidence.filter(
+    (e) => e.attempts !== null && e.successes !== null,
+  );
   const attempts = measured.reduce((n, e) => n + e.attempts!, 0);
   const successes = measured.reduce((n, e) => n + e.successes!, 0);
-  return { attempts, successes, rate: attempts > 0 ? successes / attempts : null, measuredSessions: measured.length };
+  return {
+    attempts,
+    successes,
+    rate: attempts > 0 ? successes / attempts : null,
+    measuredSessions: measured.length,
+  };
 }
