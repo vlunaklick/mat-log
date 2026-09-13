@@ -1,3 +1,4 @@
+import { EvidenceEditor } from "../training/EvidenceEditor";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { X } from "lucide-react";
@@ -28,7 +29,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 const BELTS = ["white", "blue", "purple", "brown", "black"] as const;
-const OUTCOMES: RollOutcome[] = ["dominated", "won", "even", "lost", "survived"];
+const OUTCOMES: RollOutcome[] = ["dominated", "won", "even", "lost", "survived", "unknown"];
 
 function emptySession(): Session {
   return {
@@ -55,6 +56,8 @@ function SessionForm({ initial }: { initial: Session }) {
   const { data: techniques } = useTechniques();
   const { create, update, remove } = useSessionMutations();
 
+  const [evidence, setEvidence] = useState(initial.evidence ?? []);
+  const [goalNotes, setGoalNotes] = useState(initial.goalNotes ?? "");
   const [date, setDate] = useState(initial.date);
   const [style, setStyle] = useState<Style | null>(initial.style);
   const [durationMin, setDurationMin] = useState(initial.durationMin);
@@ -82,6 +85,8 @@ function SessionForm({ initial }: { initial: Session }) {
     const payload = {
       date,
       style,
+      evidence: evidence.filter(e => techniqueIds.includes(e.techniqueId)),
+      goalNotes,
       durationMin,
       energy,
       classTopic,
@@ -115,6 +120,8 @@ function SessionForm({ initial }: { initial: Session }) {
   return (
     <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6">
       <PageHeader title={isEditing ? "Edit session." : "Log today's class."} lead="One line per class. Be honest." />
+      <EvidenceEditor value={evidence.filter(e => techniqueIds.includes(e.techniqueId))} onChange={setEvidence} techniques={techniques ?? []} />
+      <Field><FieldLabel htmlFor="goal-notes">Qué pasó con tu objetivo</FieldLabel><Textarea id="goal-notes" value={goalNotes} onChange={e => setGoalNotes(e.target.value)} /></Field>
 
       {saveError && (
         <Alert variant="destructive">

@@ -35,7 +35,7 @@ const OUTCOME_LABELS: Record<RollOutcome, string> = {
   survived: "Survived",
 };
 
-const OUTCOME_ORDER: RollOutcome[] = ["dominated", "won", "even", "lost", "survived"];
+const OUTCOME_ORDER: RollOutcome[] = ["dominated", "won", "even", "lost", "survived", "unknown"];
 const STACK_COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)"];
 
 export default function ProgressPage() {

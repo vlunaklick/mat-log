@@ -82,11 +82,14 @@ export const techniquesRoute = new Hono<AppEnv>()
     const userId = c.get("userId");
     const id = Number(c.req.param("id"));
     if (!Number.isInteger(id)) return c.json({ error: "invalid id" }, 400);
-    const [row] = await db
-      .delete(schema.techniques)
-      .where(and(eq(schema.techniques.id, id), eq(schema.techniques.userId, userId)))
-      .returning();
-    if (!row) return c.json({ error: "not found" }, 404);
+    await db.transaction(async tx => {
+      const [state] = await tx.select().from(schema.trainingState).where(eq(schema.trainingState.userId, userId)).for('update');
+      const [row] = await tx.delete(schema.techniques).where(and(eq(schema.techniques.id, id), eq(schema.techniques.userId, userId))).returning();
+      if (!row) return;
+      const sessions = await tx.select().from(schema.trainingSessions).where(eq(schema.trainingSessions.userId, userId));
+      for (const s of sessions) if (s.techniqueIds.includes(id)) await tx.update(schema.trainingSessions).set({ techniqueIds:s.techniqueIds.filter(t => t !== id),evidence:s.evidence.filter(e => e.techniqueId !== id) }).where(eq(schema.trainingSessions.id,s.id));
+      if (state) await tx.update(schema.trainingState).set({ revision:state.revision+1, gameplans:state.gameplans.map(p => ({ ...p,nodes:p.nodes.map(n => n.techniqueId === id ? { ...n,techniqueId:null } : n) })) }).where(eq(schema.trainingState.userId,userId));
+    });
     return c.body(null, 204);
   })
   .post("/:id/review", async (c) => {

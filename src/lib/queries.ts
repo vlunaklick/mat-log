@@ -11,7 +11,7 @@ export function useSessions() {
 
 export function useSessionMutations() {
   const queryClient = useQueryClient();
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["sessions"] });
+  const invalidate = () => Promise.all(["sessions", "drafts", "techniques"].map(key => queryClient.invalidateQueries({ queryKey: [key] })));
 
   const create = useMutation({
     mutationFn: (session: Omit<Session, "id" | "createdAt">) => api.post<Session>("/api/sessions", session),
@@ -42,7 +42,7 @@ type TechniqueInput = Pick<Technique, "name" | "position" | "type" | "steps" | "
 
 export function useTechniqueMutations() {
   const queryClient = useQueryClient();
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["techniques"] });
+  const invalidate = () => Promise.all(["techniques", "sessions", "training"].map(key => queryClient.invalidateQueries({ queryKey: [key] })));
 
   const create = useMutation({
     mutationFn: (technique: TechniqueInput) => api.post<Technique>("/api/techniques", technique),

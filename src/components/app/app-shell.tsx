@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { BookOpen, Brain, ChartNoAxesCombined, LogOut, Settings, Swords } from "lucide-react";
+import { CalendarCheck, Route, BookOpen, Brain, ChartNoAxesCombined, LogOut, Settings, Swords } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { authClient } from "@/lib/auth-client";
 import { queryClient } from "@/main";
@@ -24,11 +24,13 @@ async function handleSignOut() {
 }
 
 export const NAV = [
-  { to: "/", label: "Journal", icon: BookOpen, match: (p: string) => p === "/" || p.startsWith("/session") },
-  { to: "/techniques", label: "Techniques", icon: Swords, match: (p: string) => p.startsWith("/techniques") || p.startsWith("/review") },
-  { to: "/progress", label: "Progress", icon: ChartNoAxesCombined, match: (p: string) => p.startsWith("/progress") },
+  { to: "/", label: "Hoy", icon: CalendarCheck, match: (p: string) => p === "/" },
+  { to: "/journal", label: "Diario", icon: BookOpen, match: (p: string) => p.startsWith("/journal") || p.startsWith("/session") || p.startsWith("/drafts") },
+  { to: "/techniques", label: "Técnicas", icon: Swords, match: (p: string) => p.startsWith("/techniques") || p.startsWith("/review") || p.startsWith("/explore") },
+  { to: "/gameplan", label: "Mi juego", icon: Route, match: (p: string) => p.startsWith("/gameplan") },
   { to: "/coach", label: "Coach", icon: Brain, match: (p: string) => p.startsWith("/coach") },
-  { to: "/settings", label: "Settings", icon: Settings, match: (p: string) => p.startsWith("/settings") },
+  { to: "/progress", label: "Progreso", icon: ChartNoAxesCombined, match: (p: string) => p.startsWith("/progress") },
+  { to: "/settings", label: "Perfil", icon: Settings, match: (p: string) => p.startsWith("/settings") },
 ];
 
 function Wordmark() {
@@ -86,7 +88,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 function MobileNav({ pathname }: { pathname: string }) {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-[max(env(safe-area-inset-bottom),12px)] md:hidden pointer-events-none">
-      <div className="pointer-events-auto flex w-full max-w-md items-center justify-between rounded-full bg-surface p-1.5">
+      <div className="pointer-events-auto flex w-full max-w-lg items-center justify-between rounded-full bg-surface p-1.5">
         {NAV.map((item) => {
           const active = item.match(pathname);
           return (

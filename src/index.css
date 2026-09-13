@@ -196,3 +196,15 @@ body {
 @utility text-lead { font-size: 1.125rem; line-height: 1.38; font-weight: var(--font-weight-light); }
 @utility text-label { font-size: 0.75rem; line-height: 1.33; font-weight: 600; }
 @utility squircle { border-radius: 30%; }
+
+/* Native selects retain platform keyboard and mobile picker behavior. */
+.training-select {
+  width: 100%;
+  min-height: 2.75rem;
+  border-radius: 1rem;
+  background: var(--input);
+  color: var(--foreground);
+  padding: .65rem .85rem;
+  font: inherit;
+}
+.training-select:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }

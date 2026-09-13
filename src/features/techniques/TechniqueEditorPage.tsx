@@ -1,3 +1,4 @@
+import { TechniqueJourney } from "../training/TechniqueJourney";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ExternalLink } from "lucide-react";
@@ -111,6 +112,7 @@ function TechniqueForm({
   return (
     <div className="mx-auto flex w-full max-w-[720px] flex-col gap-8">
       <PageHeader title={technique ? "Edit technique." : "New technique."} />
+      {technique?.id && <TechniqueJourney id={technique.id} />}
 
       {saveError && (
         <Alert variant="destructive">

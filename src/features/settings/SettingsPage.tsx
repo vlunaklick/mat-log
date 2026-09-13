@@ -1,3 +1,4 @@
+import { ProfileForm } from "../training/ProfileForm";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -27,7 +28,7 @@ function SettingsForm({ initial }: { initial: Settings }) {
   const queryClient = useQueryClient();
   const updateSettings = useUpdateSettings();
 
-  const [beltStartDate, setBeltStartDate] = useState(initial.beltStartDate ?? "");
+  const beltStartDate = initial.beltStartDate ?? "";
   const [weeklyGoalSessions, setWeeklyGoalSessions] = useState(initial.weeklyGoalSessions);
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
@@ -94,16 +95,13 @@ function SettingsForm({ initial }: { initial: Settings }) {
     <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6">
       <PageHeader title="Settings." lead="Configure your training goals and your data." />
 
+      <ProfileForm />
       <Card>
         <CardHeader>
           <CardTitle>Training</CardTitle>
         </CardHeader>
         <CardContent>
           <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="belt-start-date">Belt start date</FieldLabel>
-              <Input id="belt-start-date" type="date" value={beltStartDate} onChange={(e) => setBeltStartDate(e.target.value)} />
-            </Field>
             <Field>
               <FieldLabel htmlFor="weekly-goal">Weekly goal (sessions)</FieldLabel>
               <Input
@@ -165,7 +163,7 @@ function SettingsForm({ initial }: { initial: Settings }) {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Replace all current data?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Importing a backup replaces all current sessions and techniques. This cannot be undone.
+                    Un backup v3 reemplaza clases, técnicas, perfil, objetivos, gameplans, borradores y chats. Los backups anteriores reemplazan clases y técnicas; conservan los chats y borradores. Exportá una copia antes de continuar.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

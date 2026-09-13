@@ -51,7 +51,7 @@ export default function JournalPage() {
         title="Journal."
         lead="One line per class. Be honest."
         action={
-          <Button nativeButton={false} render={<Link to="/session/new" />}>Log today's class</Button>
+          <Button nativeButton={false} render={<Link to="/coach?mode=log" />}>Log today's class</Button>
         }
       />
 
@@ -61,6 +61,7 @@ export default function JournalPage() {
         </Alert>
       )}
 
+      <div className="flex gap-2"><Button variant="outline" nativeButton={false} render={<Link to="/drafts" />}>Borradores</Button><Button variant="ghost" nativeButton={false} render={<Link to="/session/new" />}>Registro manual</Button></div>
       <div className="grid gap-3 sm:grid-cols-2">
         <StatTile label="This week" value={`${sessionsThisWeek} / ${weeklyGoal}`} hint="sessions" />
         <StatTile label="Streak" value={streakWeeks} hint={`week${streakWeeks === 1 ? "" : "s"}`} highlight={streakWeeks >= 2} />

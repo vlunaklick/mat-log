@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Search } from "lucide-react";
+import { useSessions } from "@/lib/queries";
+import { techniqueProgress, STAGE_LABELS } from "@/lib/training";
 import { useTechniques } from "@/lib/queries";
 import { POSITIONS, type Position } from "@/lib/types";
 import { PageHeader } from "@/components/app/page-header";
@@ -15,14 +17,19 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function TechniquesPage() {
+  const sessions = useSessions();
+  const [libraryView, setLibraryView] = useState("learned");
+  const practicedIds = new Set(sessions.data?.flatMap(s => s.techniqueIds) ?? []);
   const [query, setQuery] = useState("");
   const [position, setPosition] = useState<Position | "all">("all");
 
   const { data: techniques, isPending, isError, error } = useTechniques();
   const now = Date.now();
-  const dueCount = techniques?.filter((t) => t.dueAt <= now).length ?? 0;
+  const dueCount = techniques?.filter((t) => !t.archived && practicedIds.has(t.id!) && t.dueAt <= now).length ?? 0;
 
   const filtered = (techniques ?? []).filter((t) => {
+    if (t.archived) return false;
+    if (libraryView === "learned" && !practicedIds.has(t.id!)) return false;
     if (position !== "all" && t.position !== position) return false;
     if (query.trim() && !t.name.toLowerCase().includes(query.trim().toLowerCase())) return false;
     return true;
@@ -48,6 +55,7 @@ export default function TechniquesPage() {
         </Alert>
       )}
 
+      <div className="flex flex-wrap items-center justify-between gap-3"><ToggleGroup value={[libraryView]} onValueChange={v => v[0] && setLibraryView(v[0])}><ToggleGroupItem value="learned">Mi recorrido</ToggleGroupItem><ToggleGroupItem value="saved">Todas las guardadas</ToggleGroupItem></ToggleGroup><Button variant="outline" nativeButton={false} render={<Link to="/explore" />}>Explorar catálogo</Button></div>
       <Card className="bg-surface ring-0">
         <div className="flex flex-col gap-4 px-5 md:flex-row md:items-center md:justify-between">
           <p className="text-lead">
@@ -86,7 +94,7 @@ export default function TechniquesPage() {
         </ToggleGroup>
       </div>
 
-      {isPending ? (
+      {isPending || sessions.isPending ? (
         <div className="flex flex-col gap-3">
           <Skeleton className="h-24 rounded-3xl" />
           <Skeleton className="h-24 rounded-3xl" />
@@ -95,7 +103,7 @@ export default function TechniquesPage() {
         <Empty>
           <EmptyHeader>
             <EmptyTitle>No techniques found.</EmptyTitle>
-            <EmptyDescription>Add your first one to start building your library.</EmptyDescription>
+            <EmptyDescription>Las técnicas aparecen acá al confirmar tus clases. Podés ver las referencias guardadas o explorar el catálogo.</EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (
@@ -110,7 +118,7 @@ export default function TechniquesPage() {
                     <Link to={`/techniques/${t.id}`} className="flex items-center justify-between gap-2 px-5 py-3">
                       <div className="flex flex-col gap-1">
                         <span className="text-sm font-medium">{t.name}</span>
-                        <Badge variant="secondary">{t.type}</Badge>
+                        <Badge variant="secondary">{practicedIds.has(t.id!) ? STAGE_LABELS[techniqueProgress(sessions.data?.flatMap(s => s.evidence ?? []).filter(e => e.techniqueId === t.id) ?? [])] : "Guardada para explorar"}</Badge>
                       </div>
                       {t.dueAt <= now && <Badge variant="outline">Due</Badge>}
                     </Link>
@@ -123,7 +131,7 @@ export default function TechniquesPage() {
                     <Card className="flex-row items-center justify-between gap-2 px-5">
                       <div className="flex flex-col gap-1">
                         <span className="text-sm font-medium">{t.name}</span>
-                        <Badge variant="secondary">{t.type}</Badge>
+                        <Badge variant="secondary">{practicedIds.has(t.id!) ? STAGE_LABELS[techniqueProgress(sessions.data?.flatMap(s => s.evidence ?? []).filter(e => e.techniqueId === t.id) ?? [])] : "Guardada para explorar"}</Badge>
                       </div>
                       {t.dueAt <= now && <Badge variant="outline">Due</Badge>}
                     </Card>

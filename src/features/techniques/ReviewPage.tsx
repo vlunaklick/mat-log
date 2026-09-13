@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useTechniqueMutations, useTechniques } from "@/lib/queries";
+import { useTechniqueMutations, useTechniques, useSessions } from "@/lib/queries";
 import type { Grade } from "@/lib/srs";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function ReviewPage() {
+  const sessions = useSessions();
+  const practiced = new Set(sessions.data?.flatMap(s => s.techniqueIds) ?? []);
   const [showBack, setShowBack] = useState(false);
   // Ids graded "Again" this session: kept in the queue even though their new
   // dueAt (a few minutes out) would otherwise fall outside the due filter.
@@ -21,7 +23,7 @@ export default function ReviewPage() {
   const { data: techniques, isPending } = useTechniques();
   const { review } = useTechniqueMutations();
 
-  if (isPending) {
+  if (isPending || sessions.isPending) {
     return (
       <div className="mx-auto flex w-full max-w-[560px] flex-col gap-6">
         <PageHeader title="Review." />
@@ -32,7 +34,7 @@ export default function ReviewPage() {
 
   const now = Date.now();
   const dueTechniques = (techniques ?? [])
-    .filter((t) => t.dueAt <= now || (t.id !== undefined && keepInSession.includes(t.id)))
+    .filter((t) => !t.archived && practiced.has(t.id!) && (t.dueAt <= now || (t.id !== undefined && keepInSession.includes(t.id))))
     .sort((a, b) => a.dueAt - b.dueAt);
 
   if (dueTechniques.length === 0) {

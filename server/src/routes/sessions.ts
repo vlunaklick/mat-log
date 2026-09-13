@@ -1,3 +1,5 @@
+import { checkTechniqueIds } from "../training/store.ts";
+import { dateSchema, stageSchema } from "../training/validation.ts";
 import { Hono } from "hono";
 import { z } from "zod";
 import { and, desc, eq } from "../db/index.ts";
@@ -28,7 +30,9 @@ const rollSchema = z.object({
 });
 
 const sessionSchema = z.object({
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date must be YYYY-MM-DD"),
+  evidence: z.array(z.object({ techniqueId: z.number().int().positive(), stage: stageSchema, attempts: z.number().int().min(0).nullable(), successes: z.number().int().min(0).nullable(), notes: z.string() }).refine(e => e.attempts === null || e.successes === null || e.successes <= e.attempts)).optional(),
+  goalNotes: z.string().optional(),
+  date: dateSchema,
   style: z.enum(["gi", "nogi"]).nullable(),
   durationMin: z.number().int().nonnegative().nullable(),
   classTopic: z.string(),
@@ -73,6 +77,7 @@ export const sessionsRoute = new Hono<AppEnv>()
     const userId = c.get("userId");
     const parsed = sessionSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: parsed.error.message }, 400);
+    await checkTechniqueIds(userId, [...parsed.data.techniqueIds, ...(parsed.data.evidence ?? []).map(e => e.techniqueId)]);
     const [row] = await db
       .insert(schema.trainingSessions)
       .values({ ...parsed.data, userId, createdAt: Date.now() })
@@ -85,6 +90,8 @@ export const sessionsRoute = new Hono<AppEnv>()
     if (!Number.isInteger(id)) return c.json({ error: "invalid id" }, 400);
     const parsed = sessionSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: parsed.error.message }, 400);
+    await checkTechniqueIds(userId, [...parsed.data.techniqueIds, ...(parsed.data.evidence ?? []).map(e => e.techniqueId)]);
+    if (parsed.data.evidence?.some(e => !parsed.data.techniqueIds.includes(e.techniqueId))) return c.json({ error: "La evidencia debe corresponder a las técnicas de la clase." }, 400);
     const [row] = await db
       .update(schema.trainingSessions)
       .set(parsed.data)
