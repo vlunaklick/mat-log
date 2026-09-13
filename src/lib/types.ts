@@ -1,3 +1,4 @@
+import type { TechniqueEvidence } from "./training";
 export type Style = "gi" | "nogi";
 
 export const POSITIONS = [
@@ -22,6 +23,8 @@ export type TechniqueType = (typeof TECHNIQUE_TYPES)[number];
 export interface Technique {
   id?: number;
   name: string;
+  archived?: boolean;
+  catalogId?: string;
   position: Position;
   type: TechniqueType;
   /** Step by step notes in the user's own words. */
@@ -40,7 +43,7 @@ export interface Technique {
   reviewCount: number;
 }
 
-export type RollOutcome = "dominated" | "won" | "even" | "lost" | "survived";
+export type RollOutcome = "dominated" | "won" | "even" | "lost" | "survived" | "unknown";
 
 export interface Roll {
   partnerName?: string;
@@ -54,8 +57,8 @@ export interface Roll {
 export interface Session {
   id?: number;
   date: string; // YYYY-MM-DD
-  style: Style;
-  durationMin: number;
+  style: Style | null;
+  durationMin: number | null;
   /** Free text: what the class covered. */
   classTopic: string;
   /** Technique ids drilled in this class. */
@@ -65,7 +68,9 @@ export interface Session {
   whatFailed: string;
   /** The single thing to focus on next class. */
   nextFocus: string;
-  energy: 1 | 2 | 3 | 4 | 5;
+  energy: 1 | 2 | 3 | 4 | 5 | null;
+  evidence?: TechniqueEvidence[];
+  goalNotes?: string;
   createdAt: number;
 }
 

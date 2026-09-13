@@ -5,10 +5,11 @@ import { newCardFields, schedule } from "../../../src/lib/srs.ts";
 import { and, asc, eq } from "../db/index.ts";
 import { db, schema } from "../db/index.ts";
 import type { AppEnv } from "../middleware.ts";
-import { STARTER } from "../seed-data.ts";
+
 
 const techniqueSchema = z.object({
   name: z.string().min(1),
+  archived: z.boolean().optional(),
   position: z.enum(POSITIONS),
   type: z.enum(TECHNIQUE_TYPES),
   steps: z.string(),
@@ -25,6 +26,8 @@ export function techniqueToApi(row: typeof schema.techniques.$inferSelect) {
   return {
     id: row.id,
     name: row.name,
+    archived: row.archived,
+    catalogId: row.catalogId ?? undefined,
     position: row.position,
     type: row.type,
     steps: row.steps,
@@ -43,19 +46,6 @@ export function techniqueToApi(row: typeof schema.techniques.$inferSelect) {
 export const techniquesRoute = new Hono<AppEnv>()
   .get("/", async (c) => {
     const userId = c.get("userId");
-    const existing = await db.select().from(schema.techniques).where(eq(schema.techniques.userId, userId)).limit(1);
-    if (existing.length === 0) {
-      const now = Date.now();
-      await db.insert(schema.techniques).values(
-        STARTER.map((t) => ({
-          ...t,
-          userId,
-          createdAt: now,
-          updatedAt: now,
-          ...newCardFields(),
-        })),
-      );
-    }
     const rows = await db
       .select()
       .from(schema.techniques)

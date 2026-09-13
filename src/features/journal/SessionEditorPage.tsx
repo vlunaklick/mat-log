@@ -56,9 +56,9 @@ function SessionForm({ initial }: { initial: Session }) {
   const { create, update, remove } = useSessionMutations();
 
   const [date, setDate] = useState(initial.date);
-  const [style, setStyle] = useState<Style>(initial.style);
+  const [style, setStyle] = useState<Style | null>(initial.style);
   const [durationMin, setDurationMin] = useState(initial.durationMin);
-  const [energy, setEnergy] = useState<1 | 2 | 3 | 4 | 5>(initial.energy);
+  const [energy, setEnergy] = useState<1 | 2 | 3 | 4 | 5 | null>(initial.energy);
   const [classTopic, setClassTopic] = useState(initial.classTopic);
   const [techniqueIds, setTechniqueIds] = useState<number[]>(initial.techniqueIds);
   const [rolls, setRolls] = useState<Roll[]>(initial.rolls);
@@ -132,7 +132,7 @@ function SessionForm({ initial }: { initial: Session }) {
 
             <Field>
               <FieldLabel>Style</FieldLabel>
-              <ToggleGroup value={[style]} onValueChange={(v) => v[0] && setStyle(v[0] as Style)}>
+              <ToggleGroup value={style ? [style] : []} onValueChange={(v) => v[0] && setStyle(v[0] as Style)}>
                 <ToggleGroupItem value="gi">GI</ToggleGroupItem>
                 <ToggleGroupItem value="nogi">NO-GI</ToggleGroupItem>
               </ToggleGroup>
@@ -144,14 +144,14 @@ function SessionForm({ initial }: { initial: Session }) {
                 id="duration"
                 type="number"
                 min={0}
-                value={durationMin}
-                onChange={(e) => setDurationMin(Number(e.target.value))}
+                value={durationMin ?? ""}
+                onChange={(e) => setDurationMin(e.target.value === "" ? null : Number(e.target.value))}
               />
             </Field>
 
             <Field>
               <FieldLabel>Energy</FieldLabel>
-              <ToggleGroup value={[String(energy)]} onValueChange={(v) => v[0] && setEnergy(Number(v[0]) as 1 | 2 | 3 | 4 | 5)}>
+              <ToggleGroup value={energy === null ? [] : [String(energy)]} onValueChange={(v) => v[0] && setEnergy(Number(v[0]) as 1 | 2 | 3 | 4 | 5)}>
                 {([1, 2, 3, 4, 5] as const).map((n) => (
                   <ToggleGroupItem key={n} value={String(n)}>
                     {n}

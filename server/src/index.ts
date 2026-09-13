@@ -1,3 +1,5 @@
+import { ZodError } from "zod";
+import { HTTPException } from "hono/http-exception";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { logger } from "hono/logger";
@@ -18,6 +20,8 @@ registerRoutes(app);
 
 app.notFound((c) => c.json({ error: "not found" }, 404));
 app.onError((err, c) => {
+  if (err instanceof ZodError) return c.json({ error: err.issues.map(i => i.message).join("; ") }, 400);
+  if (err instanceof HTTPException) return c.json({ error: err.message }, err.status);
   console.error(err);
   return c.json({ error: err.message }, 500);
 });

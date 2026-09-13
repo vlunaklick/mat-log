@@ -22,7 +22,7 @@ export function weekStartISO(iso: string): string {
 }
 
 export function totalMatHours(sessions: Session[]): number {
-  return sessions.reduce((sum, s) => sum + s.durationMin, 0) / 60;
+  return sessions.reduce((sum, s) => sum + (s.durationMin ?? 0), 0) / 60;
 }
 
 export function sessionCount(sessions: Session[]): number {
@@ -53,7 +53,7 @@ export function weeklyCounts(
     const bucket = buckets.get(start);
     if (bucket) {
       bucket.count += 1;
-      bucket.minutes += s.durationMin;
+      bucket.minutes += s.durationMin ?? 0;
     }
   }
   return starts.map((weekStart) => ({ weekStart, ...buckets.get(weekStart)! }));
@@ -85,7 +85,7 @@ export function stuckPositions(sessions: Session[]): Array<{ position: Position;
 }
 
 export function rollOutcomes(sessions: Session[]): Record<RollOutcome, number> {
-  const result: Record<RollOutcome, number> = { dominated: 0, won: 0, even: 0, lost: 0, survived: 0 };
+  const result: Record<RollOutcome, number> = { dominated: 0, won: 0, even: 0, lost: 0, survived: 0, unknown: 0 };
   for (const s of sessions) {
     for (const r of s.rolls) {
       result[r.outcome] += 1;
@@ -114,8 +114,8 @@ export function outcomesByBelt(
 export function giVsNogi(sessions: Session[]): { gi: number; nogi: number } {
   return sessions.reduce(
     (acc, s) => {
-      if (s.style === "gi") acc.gi += s.durationMin;
-      else acc.nogi += s.durationMin;
+      if (s.style === "gi") acc.gi += s.durationMin ?? 0;
+      else if (s.style === "nogi") acc.nogi += s.durationMin ?? 0;
       return acc;
     },
     { gi: 0, nogi: 0 },

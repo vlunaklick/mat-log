@@ -27,6 +27,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const OUTCOME_LABELS: Record<RollOutcome, string> = {
+  unknown: "Not recorded",
   dominated: "Dominated",
   won: "Won",
   even: "Even",

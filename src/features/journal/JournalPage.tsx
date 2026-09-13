@@ -86,10 +86,10 @@ export default function JournalPage() {
                 <CardHeader>
                   <div className="flex items-center justify-between gap-2">
                     <CardTitle>{formatDate(s.date)}</CardTitle>
-                    <Badge variant="outline">{s.style === "gi" ? "GI" : "NO-GI"}</Badge>
+                    <Badge variant="outline">{s.style === "gi" ? "GI" : s.style === "nogi" ? "NO-GI" : "Sin modalidad"}</Badge>
                   </div>
                   <CardDescription>
-                    {s.durationMin} min &middot; {s.rolls.length} roll{s.rolls.length === 1 ? "" : "s"}
+                    {s.durationMin === null ? "Duración pendiente" : `${s.durationMin} min`} &middot; {s.rolls.length} roll{s.rolls.length === 1 ? "" : "s"}
                   </CardDescription>
                 </CardHeader>
                 {(s.classTopic || s.nextFocus) && (

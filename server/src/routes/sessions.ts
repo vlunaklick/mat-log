@@ -7,7 +7,7 @@ import type { AppEnv } from "../middleware.ts";
 const rollSchema = z.object({
   partnerName: z.string().optional(),
   partnerBelt: z.enum(["white", "blue", "purple", "brown", "black"]).optional(),
-  outcome: z.enum(["dominated", "won", "even", "lost", "survived"]),
+  outcome: z.enum(["dominated", "won", "even", "lost", "survived", "unknown"]),
   stuckIn: z
     .enum([
       "Standing / Takedowns",
@@ -29,15 +29,15 @@ const rollSchema = z.object({
 
 const sessionSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date must be YYYY-MM-DD"),
-  style: z.enum(["gi", "nogi"]),
-  durationMin: z.number().int().nonnegative(),
+  style: z.enum(["gi", "nogi"]).nullable(),
+  durationMin: z.number().int().nonnegative().nullable(),
   classTopic: z.string(),
   techniqueIds: z.array(z.number().int()),
   rolls: z.array(rollSchema),
   whatWorked: z.string(),
   whatFailed: z.string(),
   nextFocus: z.string(),
-  energy: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
+  energy: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]).nullable(),
 });
 
 export function sessionToApi(row: typeof schema.trainingSessions.$inferSelect) {
@@ -52,7 +52,9 @@ export function sessionToApi(row: typeof schema.trainingSessions.$inferSelect) {
     whatWorked: row.whatWorked,
     whatFailed: row.whatFailed,
     nextFocus: row.nextFocus,
-    energy: row.energy as 1 | 2 | 3 | 4 | 5,
+    energy: row.energy as 1 | 2 | 3 | 4 | 5 | null,
+    evidence: row.evidence,
+    goalNotes: row.goalNotes,
     createdAt: row.createdAt,
   };
 }
