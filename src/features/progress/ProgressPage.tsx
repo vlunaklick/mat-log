@@ -1,7 +1,6 @@
 import { useMemo } from "react";
-import { useLiveQuery } from "dexie-react-hooks";
 import { Link } from "react-router-dom";
-import { db, DEFAULT_SETTINGS } from "@/lib/db";
+import { useSessions, useSettings, useTechniques } from "@/lib/queries";
 import {
   giVsNogi,
   outcomesByBelt,
@@ -24,6 +23,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const OUTCOME_LABELS: Record<RollOutcome, string> = {
   dominated: "Dominated",
@@ -37,11 +38,12 @@ const OUTCOME_ORDER: RollOutcome[] = ["dominated", "won", "even", "lost", "survi
 const STACK_COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)"];
 
 export default function ProgressPage() {
-  const sessions = useLiveQuery(() => db.sessions.toArray(), []);
-  const techniques = useLiveQuery(() => db.techniques.toArray(), []);
-  const settings = useLiveQuery(() => db.settings.get("settings"), []);
+  const { data: sessions, isPending: sessionsPending, isError, error } = useSessions();
+  const { data: techniques, isPending: techniquesPending } = useTechniques();
+  const { data: settings } = useSettings();
 
-  const weeklyGoal = settings?.weeklyGoalSessions ?? DEFAULT_SETTINGS.weeklyGoalSessions;
+  const weeklyGoal = settings?.weeklyGoalSessions ?? 3;
+  const isPending = sessionsPending || techniquesPending;
 
   const stats = useMemo(() => {
     const s = sessions ?? [];
@@ -61,11 +63,28 @@ export default function ProgressPage() {
     };
   }, [sessions, techniques]);
 
-  if (sessions === undefined || techniques === undefined) {
+  if (isError) {
     return (
       <div className="flex flex-col gap-8">
         <PageHeader title="Progress." lead="What the mat is telling you." />
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <Alert variant="destructive">
+          <AlertDescription>{error instanceof Error ? error.message : "Could not load progress."}</AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
+  if (isPending || !sessions || !techniques) {
+    return (
+      <div className="flex flex-col gap-8">
+        <PageHeader title="Progress." lead="What the mat is telling you." />
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <Skeleton className="h-24 rounded-3xl" />
+          <Skeleton className="h-24 rounded-3xl" />
+          <Skeleton className="h-24 rounded-3xl" />
+          <Skeleton className="h-24 rounded-3xl" />
+        </div>
+        <Skeleton className="h-48 rounded-3xl" />
       </div>
     );
   }
