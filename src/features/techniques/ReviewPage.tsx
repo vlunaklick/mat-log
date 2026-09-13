@@ -1,14 +1,15 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useLiveQuery } from "dexie-react-hooks";
-import { db } from "@/lib/db";
-import { schedule, type Grade } from "@/lib/srs";
+import { useTechniqueMutations, useTechniques } from "@/lib/queries";
+import type { Grade } from "@/lib/srs";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Empty, EmptyHeader, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function ReviewPage() {
   const [showBack, setShowBack] = useState(false);
@@ -17,22 +18,22 @@ export default function ReviewPage() {
   const [keepInSession, setKeepInSession] = useState<number[]>([]);
   const [doneCount, setDoneCount] = useState(0);
 
-  const dueTechniques = useLiveQuery(async () => {
-    const now = Date.now();
-    const all = await db.techniques.toArray();
-    return all
-      .filter((t) => t.dueAt <= now || (t.id !== undefined && keepInSession.includes(t.id)))
-      .sort((a, b) => a.dueAt - b.dueAt);
-  }, [keepInSession]);
+  const { data: techniques, isPending } = useTechniques();
+  const { review } = useTechniqueMutations();
 
-  if (dueTechniques === undefined) {
+  if (isPending) {
     return (
-      <div className="flex flex-col gap-8">
+      <div className="mx-auto flex w-full max-w-[560px] flex-col gap-6">
         <PageHeader title="Review." />
-        <p className="text-muted-foreground">Loading…</p>
+        <Skeleton className="h-64 rounded-3xl" />
       </div>
     );
   }
+
+  const now = Date.now();
+  const dueTechniques = (techniques ?? [])
+    .filter((t) => t.dueAt <= now || (t.id !== undefined && keepInSession.includes(t.id)))
+    .sort((a, b) => a.dueAt - b.dueAt);
 
   if (dueTechniques.length === 0) {
     return (
@@ -57,8 +58,7 @@ export default function ReviewPage() {
   async function grade(g: Grade) {
     if (!current?.id) return;
     const id = current.id;
-    const fields = schedule(current, g);
-    await db.techniques.update(id, fields);
+    await review.mutateAsync({ id, grade: g });
     setKeepInSession((prev) => (g === "again" ? (prev.includes(id) ? prev : [...prev, id]) : prev.filter((i) => i !== id)));
     setDoneCount((n) => n + (g === "again" ? 0 : 1));
     setShowBack(false);
@@ -67,6 +67,14 @@ export default function ReviewPage() {
   return (
     <div className="mx-auto flex w-full max-w-[560px] flex-col gap-6">
       <PageHeader title="Review." />
+
+      {review.isError && (
+        <Alert variant="destructive">
+          <AlertDescription>
+            {review.error instanceof Error ? review.error.message : "Could not save review."}
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="flex flex-col gap-2">
         <Progress value={total > 0 ? (doneCount / total) * 100 : 0} />
@@ -107,14 +115,14 @@ export default function ReviewPage() {
             </div>
 
             <div className="grid grid-cols-4 gap-2">
-              <Button variant="outline" onClick={() => grade("again")}>
+              <Button variant="outline" disabled={review.isPending} onClick={() => grade("again")}>
                 Again
               </Button>
-              <Button variant="outline" onClick={() => grade("hard")}>
+              <Button variant="outline" disabled={review.isPending} onClick={() => grade("hard")}>
                 Hard
               </Button>
-              <Button onClick={() => grade("good")}>Good</Button>
-              <Button variant="secondary" onClick={() => grade("easy")}>
+              <Button disabled={review.isPending} onClick={() => grade("good")}>Good</Button>
+              <Button variant="secondary" disabled={review.isPending} onClick={() => grade("easy")}>
                 Easy
               </Button>
             </div>

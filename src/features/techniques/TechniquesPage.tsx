@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useLiveQuery } from "dexie-react-hooks";
 import { Search } from "lucide-react";
-import { db } from "@/lib/db";
+import { useTechniques } from "@/lib/queries";
 import { POSITIONS, type Position } from "@/lib/types";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
@@ -12,12 +11,14 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Empty, EmptyHeader, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function TechniquesPage() {
   const [query, setQuery] = useState("");
   const [position, setPosition] = useState<Position | "all">("all");
 
-  const techniques = useLiveQuery(() => db.techniques.toArray(), []);
+  const { data: techniques, isPending, isError, error } = useTechniques();
   const now = Date.now();
   const dueCount = techniques?.filter((t) => t.dueAt <= now).length ?? 0;
 
@@ -40,6 +41,12 @@ export default function TechniquesPage() {
           <Button nativeButton={false} render={<Link to="/techniques/new" />}>Add technique</Button>
         }
       />
+
+      {isError && (
+        <Alert variant="destructive">
+          <AlertDescription>{error instanceof Error ? error.message : "Could not load techniques."}</AlertDescription>
+        </Alert>
+      )}
 
       <Card className="bg-surface ring-0">
         <div className="flex flex-col gap-4 px-5 md:flex-row md:items-center md:justify-between">
@@ -79,7 +86,12 @@ export default function TechniquesPage() {
         </ToggleGroup>
       </div>
 
-      {techniques === undefined ? null : groups.length === 0 ? (
+      {isPending ? (
+        <div className="flex flex-col gap-3">
+          <Skeleton className="h-24 rounded-3xl" />
+          <Skeleton className="h-24 rounded-3xl" />
+        </div>
+      ) : groups.length === 0 ? (
         <Empty>
           <EmptyHeader>
             <EmptyTitle>No techniques found.</EmptyTitle>

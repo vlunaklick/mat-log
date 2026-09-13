@@ -1,10 +1,8 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useLiveQuery } from "dexie-react-hooks";
 import { ExternalLink } from "lucide-react";
 import { toast } from "sonner";
-import { db } from "@/lib/db";
-import { newCardFields } from "@/lib/srs";
+import { useTechniqueMutations, useTechniques } from "@/lib/queries";
 import { POSITIONS, TECHNIQUE_TYPES, type Position, type Technique, type TechniqueType } from "@/lib/types";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
@@ -13,6 +11,8 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/in
 import { Textarea } from "@/components/ui/textarea";
 import { Field, FieldGroup, FieldLabel, FieldDescription } from "@/components/ui/field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,21 +30,20 @@ export default function TechniqueEditorPage() {
   const techniqueId = id ? Number(id) : undefined;
   const navigate = useNavigate();
 
-  const technique = useLiveQuery(
-    () => (techniqueId ? db.techniques.get(techniqueId) : undefined),
-    [techniqueId],
-  );
+  const { data: techniques, isPending } = useTechniques();
 
-  if (techniqueId && technique === undefined) {
+  if (techniqueId && isPending) {
     return (
-      <div className="flex flex-col gap-8">
+      <div className="mx-auto flex w-full max-w-[720px] flex-col gap-8">
         <PageHeader title="Technique." />
-        <p className="text-muted-foreground">Loading…</p>
+        <Skeleton className="h-96 rounded-3xl" />
       </div>
     );
   }
 
-  if (techniqueId && technique === null) {
+  const technique = techniqueId ? techniques?.find((t) => t.id === techniqueId) : undefined;
+
+  if (techniqueId && !technique) {
     return (
       <div className="flex flex-col gap-8">
         <PageHeader title="Technique." />
@@ -53,7 +52,7 @@ export default function TechniqueEditorPage() {
     );
   }
 
-  return <TechniqueForm key={technique?.id ?? "new"} technique={technique ?? undefined} navigate={navigate} />;
+  return <TechniqueForm key={technique?.id ?? "new"} technique={technique} navigate={navigate} />;
 }
 
 function TechniqueForm({
@@ -63,6 +62,8 @@ function TechniqueForm({
   technique?: Technique;
   navigate: ReturnType<typeof useNavigate>;
 }) {
+  const { create, update, remove } = useTechniqueMutations();
+
   const [name, setName] = useState(technique?.name ?? "");
   const [position, setPosition] = useState<Position>(technique?.position ?? POSITIONS[0]);
   const [type, setType] = useState<TechniqueType>(technique?.type ?? TECHNIQUE_TYPES[0]);
@@ -71,44 +72,38 @@ function TechniqueForm({
   const [mistakes, setMistakes] = useState(technique?.mistakes ?? "");
   const [videoUrl, setVideoUrl] = useState(technique?.videoUrl ?? "");
 
+  const saving = create.isPending || update.isPending;
+  const saveError = create.error ?? update.error;
+
   async function handleSave() {
     if (!name.trim()) return;
-    const now = Date.now();
-    if (technique?.id) {
-      await db.techniques.put({
-        ...technique,
-        name: name.trim(),
-        position,
-        type,
-        steps,
-        details,
-        mistakes,
-        videoUrl: videoUrl.trim() || undefined,
-        updatedAt: now,
-      });
-      toast("Technique saved.");
-      navigate(`/techniques/${technique.id}`);
-    } else {
-      const newId = await db.techniques.add({
-        name: name.trim(),
-        position,
-        type,
-        steps,
-        details,
-        mistakes,
-        videoUrl: videoUrl.trim() || undefined,
-        createdAt: now,
-        updatedAt: now,
-        ...newCardFields(),
-      });
-      toast("Technique saved.");
-      navigate(`/techniques/${newId}`);
+    const payload = {
+      name: name.trim(),
+      position,
+      type,
+      steps,
+      details,
+      mistakes,
+      videoUrl: videoUrl.trim() || undefined,
+    };
+    try {
+      if (technique?.id) {
+        const saved = await update.mutateAsync({ id: technique.id, ...payload });
+        toast("Technique saved.");
+        navigate(`/techniques/${saved.id}`);
+      } else {
+        const saved = await create.mutateAsync(payload);
+        toast("Technique saved.");
+        navigate(`/techniques/${saved.id}`);
+      }
+    } catch {
+      // error surfaced via saveError below
     }
   }
 
   async function handleDelete() {
     if (!technique?.id) return;
-    await db.techniques.delete(technique.id);
+    await remove.mutateAsync(technique.id);
     toast("Technique deleted.");
     navigate("/techniques");
   }
@@ -116,6 +111,12 @@ function TechniqueForm({
   return (
     <div className="mx-auto flex w-full max-w-[720px] flex-col gap-8">
       <PageHeader title={technique ? "Edit technique." : "New technique."} />
+
+      {saveError && (
+        <Alert variant="destructive">
+          <AlertDescription>{saveError instanceof Error ? saveError.message : "Could not save technique."}</AlertDescription>
+        </Alert>
+      )}
 
       <FieldGroup>
         <Field>
@@ -197,8 +198,8 @@ function TechniqueForm({
       </FieldGroup>
 
       <div className="flex flex-col gap-2 md:flex-row-reverse">
-        <Button onClick={handleSave} disabled={!name.trim()}>
-          Save
+        <Button onClick={handleSave} disabled={!name.trim() || saving}>
+          {saving ? "Saving…" : "Save"}
         </Button>
         {technique?.id && (
           <AlertDialog>
