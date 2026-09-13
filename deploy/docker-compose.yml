@@ -1,0 +1,77 @@
+# Mat Log on the apps VPS (bjj.vmoon.tech). Lives in /opt/bjj together with a
+# gitignored .env holding the secrets. Deploy with ./deploy.sh from the repo.
+name: bjj
+services:
+  web:
+    image: nginx:1.27-alpine
+    container_name: bjj-web
+    restart: unless-stopped
+    volumes:
+      - /opt/bjj/dist:/usr/share/nginx/html:ro
+      - /opt/bjj/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [coolify, internal]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=coolify
+      - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
+      - traefik.http.middlewares.gzip.compress=true
+      - traefik.http.routers.bjj-http.entrypoints=http
+      - traefik.http.routers.bjj-http.rule=Host(`bjj.vmoon.tech`)
+      - traefik.http.routers.bjj-http.middlewares=redirect-to-https
+      - traefik.http.routers.bjj-https.entrypoints=https
+      - traefik.http.routers.bjj-https.rule=Host(`bjj.vmoon.tech`)
+      - traefik.http.routers.bjj-https.tls=true
+      - traefik.http.routers.bjj-https.tls.certresolver=letsencrypt
+      - traefik.http.routers.bjj-https.middlewares=gzip
+      - traefik.http.services.bjj.loadbalancer.server.port=80
+
+  api:
+    build:
+      context: /opt/bjj/app
+      dockerfile: server/Dockerfile
+    container_name: bjj-api
+    restart: unless-stopped
+    env_file: /opt/bjj/.env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@db:5432/matlog
+      BETTER_AUTH_URL: https://bjj.vmoon.tech
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    networks: [internal]
+
+  db:
+    image: postgres:18-alpine
+    container_name: bjj-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: matlog
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - bjj_pg_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d matlog"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [internal]
+
+volumes:
+  bjj_pg_data:
+
+networks:
+  coolify:
+    external: true
+  internal:
