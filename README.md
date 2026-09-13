@@ -23,28 +23,31 @@ cd .. && npm install && npm run dev  # http://localhost:5173
 
 ## Production
 
-Managed in [Coolify: bjj / production / mat-log](https://coolify.vmoon.tech/project/whbor1e1vtyhc3scyxppzoen/environment/eweqghafzlevkffaye7hfvum/service/peohorsmczbc4vvmhczqtxz7), on `crecenly-apps` (`179.197.70.53`, listed as `localhost` in Coolify).
+Managed as a Git-backed [Coolify Application: bjj / production / mat-log](https://coolify.vmoon.tech/project/whbor1e1vtyhc3scyxppzoen/environment/eweqghafzlevkffaye7hfvum/application/rby1xekmtkpsodhfchzwr9zz), on `crecenly-apps` (`179.197.70.53`, listed as `localhost` in Coolify).
 
-The service contains `web` (nginx), `api` (Node), and `db` (PostgreSQL 18). Coolify manages their lifecycle, logs, environment variables, storage, and HTTPS for `bjj.vmoon.tech`. The web service also listens on host loopback port 8090.
+Coolify reads root `docker-compose.yml` from `vlunaklick/mat-log`, branch `main`. It builds `web` with `deploy/web.Dockerfile` and `api` with `server/Dockerfile`, and runs PostgreSQL 18 as `db`. The web container serves `https://bjj.vmoon.tech` and host loopback port 8090.
 
-Every push to `main` triggers the **Deploy production** GitHub Actions workflow. It uses a dedicated SSH key restricted to `/usr/local/sbin/mat-log-deploy` on the VPS. That command fetches `origin/main`, builds in Node 24 Docker, and deploys through the existing Coolify service. Runs are serialized and succeed only after replacement containers are healthy and the public HTTPS health check passes. When pushes overlap, the latest main is deployed. Secrets `VPS_DEPLOY_KEY` and `VPS_KNOWN_HOSTS` live in GitHub Actions. The last successful revision is recorded at `/data/coolify/services/peohorsmczbc4vvmhczqtxz7/deployed-revision`.
+Pushes to `main` trigger Coolify through a signed GitHub webhook. **Deployments** shows commit history, build logs, and deployment status. Use **Deploy** in the Application to redeploy the latest main manually. Preview deployments are disabled because this stack contains the production database and a fixed host port.
 
-The server entrypoint is maintained in `deploy/deploy-main.sh`; after editing it, install it with `scp deploy/deploy-main.sh crecenly-apps:/usr/local/sbin/mat-log-deploy`.
-
-For manual local deployment, `./deploy.sh` builds the frontend, uploads sources and static assets to `/data/coolify/services/peohorsmczbc4vvmhczqtxz7`, updates the Compose definition, and starts deployment through Coolify. It uses the existing administrator SSH connection and Coolify's installed PHP application. Check completion in the panel. The PHP helper depends on Coolify's internal API and may need adjustment after a Coolify upgrade.
-
-To redeploy the uploaded code or apply environment changes, use **Actions > Deploy** in Coolify. Edit secrets in **Environment Variables**; the template is `deploy/.env.example`. Do not overwrite the generated `.env` or run the old `/opt/bjj/docker-compose.yml`.
+Manage secrets in the Application's **Environment Variables**; the template is `deploy/.env.example`. They are runtime variables and are excluded from Docker build contexts. The old GitHub Actions/SSH deployment scripts are retired.
 
 ## Backup and migration
 
-Settings → Export downloads a JSON of your sessions, techniques and settings. Import restores it. Production PostgreSQL uses Docker volume `peohorsmczbc4vvmhczqtxz7_bjj-pg-data`, mounted at `/var/lib/postgresql`.
+Settings → Export downloads a JSON of your sessions, techniques and settings. Import restores it. Production PostgreSQL uses Docker volume `rby1xekmtkpsodhfchzwr9zz_bjj-pg-data`, mounted at `/var/lib/postgresql`.
 
-The September 13, 2026 migration preserved the original volume `bjj_bjj_pg_data` and stopped the old `bjj-web`, `bjj-api`, and `bjj-db` containers with automatic restart disabled. The old configuration and database dumps remain in `/opt/bjj/backups/pre-coolify/`. Treat these as sensitive files.
-
-For a fresh database backup:
+For a fresh database backup, find the current database container by its Compose labels:
 
 ```bash
-ssh crecenly-apps 'umask 077; docker exec db-peohorsmczbc4vvmhczqtxz7 pg_dump -U postgres -d matlog -Fc > /opt/bjj/backups/matlog-$(date +%Y%m%d-%H%M%S).dump'
+ssh crecenly-apps 'set -eu
+  umask 077
+  db=$(docker ps -q --filter label=com.docker.compose.project=rby1xekmtkpsodhfchzwr9zz --filter label=com.docker.compose.service=db)
+  test -n "$db"
+  docker exec "$db" pg_dump -U postgres -d matlog -Fc > /opt/bjj/backups/matlog-$(date +%Y%m%d-%H%M%S).dump
+'
 ```
 
-For rollback, first stop the managed service in Coolify. The original `/opt/bjj/docker-compose.yml` can then start the previous stack with `docker compose up -d` from that directory. Its volume contains the data at migration time: if users have written new data since migration, back up and transfer the current database before rolling back. Never run both stacks together, and never remove a database volume as part of redeployment.
+The September 13, 2026 Application migration copies the stopped Service database into the Application volume. Backups and the former deployment command are retained in `/opt/bjj/backups/pre-application-20260913/`, accessible only to root. The previous Service `peohorsmczbc4vvmhczqtxz7` is retained stopped for rollback, with its original volume `peohorsmczbc4vvmhczqtxz7_bjj-pg-data` and files in `/data/coolify/services/peohorsmczbc4vvmhczqtxz7/`.
+
+To roll back, disable this Application's auto-deploy and stop it first. If any writes occurred after migration, back up the current database and transfer it into the old Service database before restarting the old API/web containers. Restore the Service domain to `https://bjj.vmoon.tech` if necessary, then use the old Service's **Deploy** action. Never start both stacks on port 8090 or run two PostgreSQL instances against one volume. Do not delete volumes during deployment or rollback.
+
+An even older pre-Coolify stack remains stopped under `/opt/bjj`, with volume `bjj_bjj_pg_data` and backups in `/opt/bjj/backups/pre-coolify/`. Its data predates both migrations.

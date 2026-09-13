@@ -1,15 +1,14 @@
-# Managed in Coolify: bjj / production / mat-log.
-# Coolify prefixes bjj_pg_data with the service UUID. Data migrated from bjj_bjj_pg_data.
+# Git-backed Coolify Application: bjj / production / mat-log.
+# Coolify prefixes bjj_pg_data with the Application UUID.
 services:
   web:
-    image: nginx:1.27-alpine
+    build:
+      context: .
+      dockerfile: deploy/web.Dockerfile
     restart: unless-stopped
     # Loopback-only port for `tailscale serve` on the host (private access without public DNS).
     ports:
       - "127.0.0.1:8090:80"
-    volumes:
-      - /data/coolify/services/peohorsmczbc4vvmhczqtxz7/dist:/usr/share/nginx/html:ro
-      - /data/coolify/services/peohorsmczbc4vvmhczqtxz7/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       api:
         condition: service_healthy
@@ -22,7 +21,7 @@ services:
 
   api:
     build:
-      context: /data/coolify/services/peohorsmczbc4vvmhczqtxz7/app
+      context: .
       dockerfile: server/Dockerfile
     restart: unless-stopped
     environment:
