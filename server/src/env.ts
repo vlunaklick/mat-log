@@ -14,6 +14,8 @@ const schema = z.object({
   BETTER_AUTH_SECRET: z.string().min(32, "BETTER_AUTH_SECRET must be at least 32 chars"),
   /** Public origin of the app, e.g. https://bjj.vmoon.tech or http://localhost:5179 */
   BETTER_AUTH_URL: z.string().url(),
+  /** Extra origins allowed to sign in, comma separated (e.g. a Tailscale https name). */
+  TRUSTED_ORIGINS: z.string().optional(),
   GOOGLE_GENERATIVE_AI_API_KEY: z.string().min(10),
   COACH_MODEL: z.string().default("gemini-3.5-flash"),
   /** Only honoured outside production: lets scripts/create-user.ts sign up the single user. */
