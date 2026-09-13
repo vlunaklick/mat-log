@@ -1,12 +1,13 @@
-import { useLiveQuery } from "dexie-react-hooks";
 import { Link } from "react-router-dom";
-import { db, DEFAULT_SETTINGS } from "../../lib/db";
+import { useSessions, useSettings } from "@/lib/queries";
 import { PageHeader } from "@/components/app/page-header";
 import { StatTile } from "@/components/app/stat-tile";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
 import { formatDate, todayISO } from "../../lib/date";
 import type { Session } from "../../lib/types";
 
@@ -36,10 +37,10 @@ function computeStreakWeeks(sessions: Session[]): number {
 }
 
 export default function JournalPage() {
-  const sessions = useLiveQuery(() => db.sessions.orderBy("date").reverse().toArray(), []);
-  const settings = useLiveQuery(() => db.settings.get("settings"), []);
+  const { data: sessions, isPending, isError, error } = useSessions();
+  const { data: settings } = useSettings();
 
-  const weeklyGoal = settings?.weeklyGoalSessions ?? DEFAULT_SETTINGS.weeklyGoalSessions;
+  const weeklyGoal = settings?.weeklyGoalSessions ?? 3;
   const currentWeekStart = startOfWeekISO(todayISO());
   const sessionsThisWeek = (sessions ?? []).filter((s) => startOfWeekISO(s.date) === currentWeekStart).length;
   const streakWeeks = computeStreakWeeks(sessions ?? []);
@@ -54,12 +55,23 @@ export default function JournalPage() {
         }
       />
 
+      {isError && (
+        <Alert variant="destructive">
+          <AlertDescription>{error instanceof Error ? error.message : "Could not load sessions."}</AlertDescription>
+        </Alert>
+      )}
+
       <div className="grid gap-3 sm:grid-cols-2">
         <StatTile label="This week" value={`${sessionsThisWeek} / ${weeklyGoal}`} hint="sessions" />
         <StatTile label="Streak" value={streakWeeks} hint={`week${streakWeeks === 1 ? "" : "s"}`} highlight={streakWeeks >= 2} />
       </div>
 
-      {sessions === undefined ? null : sessions.length === 0 ? (
+      {isPending ? (
+        <div className="grid gap-3 md:grid-cols-2">
+          <Skeleton className="h-32 rounded-3xl" />
+          <Skeleton className="h-32 rounded-3xl" />
+        </div>
+      ) : !sessions || sessions.length === 0 ? (
         <Empty>
           <EmptyHeader>
             <EmptyTitle>No sessions yet.</EmptyTitle>

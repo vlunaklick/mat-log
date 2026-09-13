@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { useLiveQuery } from "dexie-react-hooks";
 import { useNavigate, useParams } from "react-router-dom";
 import { X } from "lucide-react";
 import { toast } from "sonner";
-import { db } from "../../lib/db";
+import { useSessionMutations, useSessions, useTechniques } from "@/lib/queries";
 import { todayISO } from "../../lib/date";
 import { POSITIONS, type Position, type Roll, type RollOutcome, type Session, type Style } from "../../lib/types";
 import { PageHeader } from "@/components/app/page-header";
@@ -14,6 +13,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,7 +52,8 @@ function emptyRoll(): Roll {
 
 function SessionForm({ initial }: { initial: Session }) {
   const navigate = useNavigate();
-  const techniques = useLiveQuery(() => db.techniques.toArray(), []) ?? [];
+  const { data: techniques } = useTechniques();
+  const { create, update, remove } = useSessionMutations();
 
   const [date, setDate] = useState(initial.date);
   const [style, setStyle] = useState<Style>(initial.style);
@@ -65,6 +67,8 @@ function SessionForm({ initial }: { initial: Session }) {
   const [nextFocus, setNextFocus] = useState(initial.nextFocus);
 
   const isEditing = initial.id !== undefined;
+  const saving = create.isPending || update.isPending;
+  const saveError = create.error ?? update.error;
 
   function updateRoll(index: number, patch: Partial<Roll>) {
     setRolls((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
@@ -75,8 +79,7 @@ function SessionForm({ initial }: { initial: Session }) {
   }
 
   async function handleSave() {
-    const session: Session = {
-      ...initial,
+    const payload = {
       date,
       style,
       durationMin,
@@ -88,18 +91,23 @@ function SessionForm({ initial }: { initial: Session }) {
       whatFailed,
       nextFocus,
     };
-    if (isEditing) {
-      await db.sessions.put(session);
-    } else {
-      await db.sessions.add(session);
+    try {
+      if (isEditing && initial.id !== undefined) {
+        await update.mutateAsync({ id: initial.id, ...payload });
+        toast("Session updated.");
+      } else {
+        await create.mutateAsync(payload);
+        toast("Session logged.");
+      }
+      navigate("/");
+    } catch {
+      // error surfaced via saveError below
     }
-    toast(isEditing ? "Session updated." : "Session logged.");
-    navigate("/");
   }
 
   async function handleDelete() {
     if (!isEditing || initial.id === undefined) return;
-    await db.sessions.delete(initial.id);
+    await remove.mutateAsync(initial.id);
     toast("Session deleted.");
     navigate("/");
   }
@@ -107,6 +115,12 @@ function SessionForm({ initial }: { initial: Session }) {
   return (
     <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6">
       <PageHeader title={isEditing ? "Edit session." : "Log today's class."} lead="One line per class. Be honest." />
+
+      {saveError && (
+        <Alert variant="destructive">
+          <AlertDescription>{saveError instanceof Error ? saveError.message : "Could not save session."}</AlertDescription>
+        </Alert>
+      )}
 
       <Card>
         <CardContent>
@@ -151,7 +165,7 @@ function SessionForm({ initial }: { initial: Session }) {
               <Input id="classTopic" value={classTopic} onChange={(e) => setClassTopic(e.target.value)} placeholder="What did class cover?" />
             </Field>
 
-            {techniques.length > 0 && (
+            {techniques && techniques.length > 0 && (
               <Field>
                 <FieldLabel>Techniques drilled</FieldLabel>
                 <ToggleGroup multiple variant="outline" value={techniqueIds.map(String)} onValueChange={(v) => setTechniqueIds(v.map(Number))} className="flex-wrap justify-start">
@@ -270,7 +284,9 @@ function SessionForm({ initial }: { initial: Session }) {
       </Card>
 
       <div className="flex flex-col gap-2">
-        <Button onClick={handleSave}>Save</Button>
+        <Button onClick={handleSave} disabled={saving}>
+          {saving ? "Saving…" : "Save"}
+        </Button>
         {isEditing && (
           <AlertDialog>
             <AlertDialogTrigger render={<Button variant="destructive" type="button" />}>Delete</AlertDialogTrigger>
@@ -299,16 +315,30 @@ function SessionForm({ initial }: { initial: Session }) {
 export default function SessionEditorPage() {
   const params = useParams<{ id?: string }>();
   const id = params.id ? Number(params.id) : undefined;
-  const session = useLiveQuery<Session | undefined>(
-    () => (id !== undefined ? db.sessions.get(id) : Promise.resolve(undefined)),
-    [id],
-  );
+  const { data: sessions, isPending } = useSessions();
 
-  if (id !== undefined && session === undefined) {
-    return null;
+  if (id !== undefined && isPending) {
+    return (
+      <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6">
+        <Skeleton className="h-10 w-64" />
+        <Skeleton className="h-64 rounded-3xl" />
+        <Skeleton className="h-40 rounded-3xl" />
+      </div>
+    );
   }
 
-  const initial = id !== undefined && session ? session : emptySession();
+  const found = id !== undefined ? sessions?.find((s) => s.id === id) : undefined;
+
+  if (id !== undefined && !found) {
+    return (
+      <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6">
+        <PageHeader title="Session." />
+        <p className="text-muted-foreground">Session not found.</p>
+      </div>
+    );
+  }
+
+  const initial = found ?? emptySession();
 
   return <SessionForm key={initial.id ?? "new"} initial={initial} />;
 }
