@@ -1,3 +1,4 @@
+import { audioRoute } from "./audio.ts";
 import { catalogRoute } from "./catalog.ts";
 import { trainingRoute } from "./training.ts";
 import type { Hono } from "hono";
@@ -10,6 +11,7 @@ import { techniquesRoute } from "./techniques.ts";
 
 /** Mount every /api resource here. Each route file exports a Hono sub-app. */
 export function registerRoutes(app: Hono<AppEnv>): void {
+  app.route("/api/audio", audioRoute);
   app.route("/api/catalog", catalogRoute);
   app.route("/api/training", trainingRoute);
   app.route("/api/sessions", sessionsRoute);

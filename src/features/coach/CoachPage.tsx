@@ -1,191 +1,63 @@
-import { useState } from "react";
-import { ArrowUp } from "lucide-react";
-import { useChat, useClearChat, streamCoach } from "@/lib/queries";
-import { useQueryClient } from "@tanstack/react-query";
-import { suggestedPrompts } from "./prompts";
-import { PageHeader } from "@/components/app/page-header";
-import { Button } from "@/components/ui/button";
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle, EmptyContent } from "@/components/ui/empty";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Skeleton } from "@/components/ui/skeleton";
-import { InputGroup, InputGroupInput, InputGroupAddon, InputGroupButton } from "@/components/ui/input-group";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-
-function Bubble({ role, content, caption }: { role: "user" | "assistant"; content: string; caption?: string }) {
-  const isUser = role === "user";
-  return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-      <div className="flex max-w-[80%] flex-col gap-1">
-        <div
-          className={
-            isUser
-              ? "whitespace-pre-wrap rounded-3xl rounded-br-md bg-primary px-4 py-2.5 text-sm text-primary-foreground"
-              : "whitespace-pre-wrap rounded-3xl rounded-bl-md bg-surface px-4 py-2.5 text-sm text-surface-foreground"
-          }
-        >
-          {content}
-        </div>
-        {caption ? <p className="px-1 text-xs text-muted-foreground">{caption}</p> : null}
-      </div>
-    </div>
-  );
-}
+import { useDeferredValue, useState } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useMutation } from '@tanstack/react-query';
+import { api } from '@/lib/api';
+import { todayISO } from '@/lib/date';
+import type { Conversation, Draft } from '@/lib/training';
+import { PageHeader } from '@/components/app/page-header';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Composer } from './Composer';
+import { useConversations, useMessages, useDrafts, useProposals, useTrainingActions } from '../training/queries';
+import { Blank, ErrorNotice, Loading } from '../training/shared';
+import { ProposalCard } from '../training/ProposalCard';
 
 export default function CoachPage() {
-  const queryClient = useQueryClient();
-  const { data: messages, isPending, isError, error } = useChat();
-  const clearChat = useClearChat();
-
-  const [input, setInput] = useState("");
-  const [pendingUser, setPendingUser] = useState("");
-  const [pendingAssistant, setPendingAssistant] = useState("");
-  const [streaming, setStreaming] = useState(false);
-  const [sendError, setSendError] = useState<string | null>(null);
-
-  async function send(text: string) {
-    const trimmed = text.trim();
-    if (!trimmed || streaming) return;
-
-    setInput("");
-    setSendError(null);
-    setPendingUser(trimmed);
-    setStreaming(true);
-    setPendingAssistant("");
-
-    try {
-      let full = "";
-      await streamCoach(trimmed, (chunk) => {
-        full += chunk;
-        setPendingAssistant(full);
-      });
-      await queryClient.invalidateQueries({ queryKey: ["chat"] });
-      setPendingUser("");
-      setPendingAssistant("");
-    } catch (err) {
-      setSendError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setStreaming(false);
+  const { id } = useParams();
+  const [query, setQuery] = useState('');
+  const conversations = useConversations(useDeferredValue(query));
+  return <div className="flex flex-col gap-6"><PageHeader title="Tu coach." lead="Tu entrenamiento, con memoria." action={<Button nativeButton={false} render={<Link to="/coach" />}>Nueva conversación</Button>} />
+    <details className="rounded-3xl bg-surface p-4" open={!id}><summary className="cursor-pointer text-sm font-medium">Historial de conversaciones</summary><div className="mt-4 flex flex-col gap-3"><Input aria-label="Buscar en todos los chats" placeholder="Buscar en todos los chats…" value={query} onChange={e => setQuery(e.target.value)} /><ErrorNotice error={conversations.error} />{conversations.isPending ? <Loading /> : <div className="flex max-h-56 flex-col gap-1 overflow-y-auto">{conversations.data?.map(c => <Link key={c.id} to={`/coach/${c.id}`} className="flex items-center justify-between gap-3 rounded-2xl p-3 hover:bg-background" aria-current={id === c.id ? 'page' : undefined}><span className="truncate">{c.title}</span><span className="shrink-0 text-xs text-muted-foreground">{new Date(c.updatedAt).toLocaleDateString()}</span></Link>)}{!conversations.data?.length && <p className="text-sm text-muted-foreground">No hay conversaciones que coincidan.</p>}</div>}</div></details>
+    <ConversationView key={id ?? 'new'} id={id} />
+  </div>;
+}
+function ConversationView({ id }: { id?: string }) {
+  const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const mode = params.get('mode') ?? 'chat';
+  const [input, setInput] = useState(params.get('prompt') ?? '');
+  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
+  const [createdId, setCreatedId] = useState<string | undefined>(id);
+  const [draftId, setDraftId] = useState<string | null>(params.get('draft'));
+  const messages = useMessages(createdId);
+  const drafts = useDrafts(); const proposals = useProposals(); const actions = useTrainingActions();
+  const send = useMutation({ mutationFn: async () => {
+    let conversationId = createdId;
+    if (!conversationId) {
+      const conversation = await api.post<Conversation>('/api/conversations', { title: input.trim().slice(0, 90) || 'Nueva conversación' });
+      conversationId = conversation.id; setCreatedId(conversationId);
     }
-  }
-
-  async function handleClear() {
-    await clearChat.mutateAsync();
-    setPendingUser("");
-    setPendingAssistant("");
-    setSendError(null);
-  }
-
-  const hasMessages = (messages && messages.length > 0) || pendingUser;
-
-  return (
-    <div className="flex flex-col gap-4">
-      <PageHeader
-        title="Coach."
-        lead="Ask about your training, get one clear focus."
-        action={
-          <AlertDialog>
-            <AlertDialogTrigger render={<Button variant="outline" size="sm" />}>Clear chat</AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Clear the whole chat history?</AlertDialogTitle>
-                <AlertDialogDescription>This removes every message in this conversation. It cannot be undone.</AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction variant="destructive" onClick={handleClear}>
-                  Clear chat
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        }
-      />
-
-      <div className="flex h-[calc(100dvh-16rem)] flex-col gap-3 overflow-y-auto">
-        {isPending && (
-          <div className="flex flex-col gap-3">
-            <Skeleton className="ml-auto h-10 w-2/3 rounded-3xl" />
-            <Skeleton className="h-16 w-3/4 rounded-3xl" />
-          </div>
-        )}
-
-        {isError && (
-          <Alert variant="destructive">
-            <AlertDescription>{error instanceof Error ? error.message : "Could not load chat."}</AlertDescription>
-          </Alert>
-        )}
-
-        {!isPending && !hasMessages && (
-          <div className="flex flex-1 flex-col gap-4">
-            <Empty>
-              <EmptyHeader>
-                <EmptyTitle>Ask your coach anything</EmptyTitle>
-                <EmptyDescription>Your last 30 days of sessions and techniques inform the answers.</EmptyDescription>
-              </EmptyHeader>
-              <EmptyContent>
-                <div className="flex flex-wrap justify-center gap-2">
-                  {suggestedPrompts().map((p) => (
-                    <Button key={p} variant="outline" size="sm" onClick={() => send(p)}>
-                      {p}
-                    </Button>
-                  ))}
-                </div>
-              </EmptyContent>
-            </Empty>
-          </div>
-        )}
-
-        {!isPending && messages?.map((m) => <Bubble key={m.id} role={m.role} content={m.content} />)}
-
-        {pendingUser && <Bubble role="user" content={pendingUser} />}
-
-        {streaming && <Bubble role="assistant" content={pendingAssistant || "…"} caption="Thinking" />}
-
-        {sendError && (
-          <Alert variant="destructive">
-            <AlertDescription>{sendError}</AlertDescription>
-          </Alert>
-        )}
-      </div>
-
-      <div className="sticky bottom-24 md:bottom-4">
-        <InputGroup className="h-auto rounded-full bg-card p-1 ring-1 ring-border-soft">
-          <InputGroupInput
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                send(input);
-              }
-            }}
-            placeholder="Ask your coach..."
-            disabled={streaming}
-          />
-          <InputGroupAddon align="inline-end">
-            <InputGroupButton
-              size="icon-sm"
-              variant="default"
-              className="rounded-full"
-              onClick={() => send(input)}
-              disabled={streaming || !input.trim()}
-              aria-label="Send"
-            >
-              <ArrowUp />
-            </InputGroupButton>
-          </InputGroupAddon>
-        </InputGroup>
-      </div>
-    </div>
-  );
+    const result = await api.post<{ draft?: Draft }>('/api/coach', { message: input, conversationId, requestId, draftId, localDate: todayISO(), mode });
+    return { conversationId, result };
+  }, onSuccess: async ({ conversationId, result }) => {
+    setInput(''); setRequestId(crypto.randomUUID());
+    if (result.draft) setDraftId(result.draft.status === 'draft' ? result.draft.id : null);
+    await actions.refresh();
+    if (!id) navigate(`/coach/${conversationId}${result.draft ? `?draft=${result.draft.id}` : ''}`, { replace: true });
+  }, onError: async () => { await actions.refresh(); } });
+  const pendingDrafts = drafts.data?.filter(d => d.conversationId === createdId && d.status === 'draft') ?? [];
+  const selected = pendingDrafts.find(d => d.id === draftId);
+  return <div className="flex flex-col gap-5">
+    <ErrorNotice error={messages.error ?? drafts.error ?? proposals.error} />
+    {!createdId && <Blank title={mode === 'log' ? 'Contame la clase.' : mode === 'profile' ? 'Conozcamos tu recorrido.' : mode === 'gameplan' ? 'Pensemos tu juego.' : 'Una conversación que continúa.'}>{mode === 'log' ? 'Hablá o escribí. Armo un borrador y te pregunto lo que falte.' : 'Podés hablar de tus clases, objetivos o planes. Los cambios importantes se confirman con vos.'}</Blank>}
+    {createdId && messages.isPending && <Loading />}
+    <div className="flex flex-col gap-4" aria-live="polite">{messages.data?.map(m => <div key={m.id} className={m.role === 'user' ? 'ml-auto max-w-[90%] rounded-3xl rounded-br-md bg-primary p-4 text-primary-foreground' : 'mr-auto max-w-full rounded-3xl bg-surface p-4'}><p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{m.content}</p><p className="mt-2 text-xs opacity-60">{new Date(m.createdAt).toLocaleString()}</p></div>)}</div>
+    {proposals.data?.filter(p => p.conversationId === createdId && p.status === 'pending').map(p => <ProposalCard key={p.id} proposal={p} />)}
+    {pendingDrafts.length > 0 && <div className="flex flex-col gap-3">{pendingDrafts.map(d => <div key={d.id} className="flex flex-wrap items-center gap-2 rounded-2xl bg-surface p-3"><Badge variant="outline">Borrador</Badge><Link className="text-sm underline" to={`/drafts/${d.id}`}>{d.data.classTopic || 'Clase por completar'}</Link><Button size="sm" variant={d.id === draftId ? 'secondary' : 'outline'} onClick={() => setDraftId(d.id)}>{d.id === draftId ? 'Respondiendo preguntas' : 'Continuar acá'}</Button></div>)}</div>}
+    {selected && <div className="flex flex-col gap-2"><p className="text-label">Preguntas pendientes</p>{selected.questions.map((q, i) => <p className="text-sm" key={i}>{q}</p>)}<Button variant="ghost" size="sm" onClick={() => setDraftId(null)}>Hablar de otra cosa</Button></div>}
+    <ErrorNotice error={send.error} />
+    <Composer value={input} onChange={text => { setInput(text); if (send.isError) { setRequestId(crypto.randomUUID()); send.reset(); } }} onSend={() => send.mutate()} busy={send.isPending} label={selected ? 'Respondé lo que recuerdes' : 'Escribí o grabá un audio'} />
+    <p className="text-xs text-muted-foreground">El coach puede recuperar chats y clases anteriores. Los borradores quedan pendientes; perfil, objetivos y gameplans cambian cuando confirmás una propuesta.</p>
+  </div>;
 }
