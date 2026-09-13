@@ -1,36 +1,36 @@
 # Mat Log
 
-A mobile-first, offline-capable BJJ training journal. Everything is stored on your device (IndexedDB). No accounts, no server.
+A BJJ training journal for one person. Log every class, keep technique notes with spaced-repetition review, watch progress, and ask an AI coach that has read your last 30 days.
 
-## Features
+Frontend: Vite + React 19 + TypeScript, Tailwind v4, shadcn (base-nova) with a monochrome pill design system (see `DESIGN.md`), installable as a PWA.
+Backend: Hono on Node, Drizzle ORM on Postgres, Better Auth (email + password, sign-up closed), Gemini via the Vercel AI SDK. The Google key lives only on the server.
 
-- **Journal**: log every class in under two minutes. Techniques drilled, each roll (partner belt, outcome, where you got stuck), what worked, what failed, and the one thing to fix next class.
-- **Techniques**: your own notes per technique, grouped by position. Flashcard review with spaced repetition so details stick between classes.
-- **Progress**: mat hours, weekly streak, weekly chart against your goal, the positions you get stuck in most, roll outcomes by belt, most drilled techniques.
-- **Coach**: chat with an AI coach that reads your last 30 days of logs and gives one concrete focus at a time. Needs your own Anthropic API key (Settings).
-
-## Run
+## Local development
 
 ```bash
-npm install
-npm run dev
+# 1. Postgres
+docker run -d --name matlog-pg -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=matlog -p 5434:5432 postgres:18-alpine
+
+# 2. API
+cd server && cp .env.example .env   # fill GOOGLE_GENERATIVE_AI_API_KEY and a 32+ char BETTER_AUTH_SECRET
+npm install && npm run db:migrate
+EMAIL=you@example.com PASSWORD='choose-one' npm run create-user
+npm run dev                          # http://localhost:3010
+
+# 3. Web (proxies /api to the API)
+cd .. && npm install && npm run dev  # http://localhost:5173
 ```
 
-Open the URL on your phone (same Wi-Fi: `npm run dev -- --host`) and "Add to Home Screen" to install it as an app.
+## Production
 
-## Build
+`./deploy.sh` builds the web bundle, rsyncs it plus the server sources to the apps VPS (`/opt/bjj`), builds the API image there and runs `docker compose up` with three containers: nginx (static + `/api` proxy), the API, and Postgres with a persistent volume. Traefik (Coolify's proxy) terminates TLS for `bjj.vmoon.tech`.
+
+Secrets are only in `/opt/bjj/.env` on the VPS; the template is `deploy/.env.example`. To create the account in production run once on the VPS:
 
 ```bash
-npm run build
-npm run preview
+cd /opt/bjj && docker compose run --rm -e NODE_ENV=development -e EMAIL=you@example.com -e PASSWORD='choose-one' api npx tsx scripts/create-user.ts
 ```
-
-Deploy the `dist/` folder to any static host (Netlify, Vercel, GitHub Pages, Cloudflare Pages).
 
 ## Backup
 
-Settings → Export backup downloads a JSON file. Import restores it. The API key is never included in backups.
-
-## Deploy
-
-`./deploy.sh` builds, rsyncs `dist/` to the apps VPS (`/opt/bjj`) and starts the nginx container that Traefik (Coolify's proxy) routes for `bjj.vmoon.tech`. The compose file and nginx config live on the VPS in `/opt/bjj`.
+Settings → Export downloads a JSON of your sessions, techniques and settings. Import restores it. The Postgres volume `bjj_pg_data` is the real store; snapshot it from the VPS if you want a second copy.
