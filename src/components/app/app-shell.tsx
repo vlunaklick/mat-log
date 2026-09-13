@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { BookOpen, Brain, ChartNoAxesCombined, Settings, Swords } from "lucide-react";
+import { BookOpen, Brain, ChartNoAxesCombined, LogOut, Settings, Swords } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { authClient } from "@/lib/auth-client";
+import { queryClient } from "@/main";
 import {
   Sidebar,
   SidebarContent,
@@ -15,6 +17,11 @@ import {
   SidebarMenuItem,
   SidebarProvider,
 } from "@/components/ui/sidebar";
+
+async function handleSignOut() {
+  await authClient.signOut();
+  queryClient.clear();
+}
 
 export const NAV = [
   { to: "/", label: "Journal", icon: BookOpen, match: (p: string) => p === "/" || p.startsWith("/session") },
@@ -57,7 +64,16 @@ export function AppShell({ children }: { children: ReactNode }) {
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
-        <SidebarFooter className="px-4 py-4 text-text-faint text-xs group-data-[collapsible=icon]:hidden">Local only. Your data never leaves this device.</SidebarFooter>
+        <SidebarFooter className="px-2 py-2">
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton tooltip="Sign out" className="rounded-full" onClick={handleSignOut}>
+                <LogOut />
+                <span>Sign out</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarFooter>
       </Sidebar>
       <SidebarInset className="bg-background">
         <main className="mx-auto w-full max-w-4xl px-4 pt-4 pb-28 md:px-8 md:pt-10 md:pb-16">{children}</main>
