@@ -1,15 +1,13 @@
 import { useState } from "react";
-import { useLiveQuery } from "dexie-react-hooks";
-import { Link } from "react-router-dom";
 import { ArrowUp } from "lucide-react";
-import { db, DEFAULT_SETTINGS } from "@/lib/db";
-import { askCoach, suggestedPrompts } from "@/lib/coach";
-import { buildCoachSummary } from "@/lib/stats";
+import { useChat, useClearChat, streamCoach } from "@/lib/queries";
+import { useQueryClient } from "@tanstack/react-query";
+import { suggestedPrompts } from "./prompts";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle, EmptyContent } from "@/components/ui/empty";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
 import { InputGroup, InputGroupInput, InputGroupAddon, InputGroupButton } from "@/components/ui/input-group";
 import {
   AlertDialog,
@@ -43,52 +41,51 @@ function Bubble({ role, content, caption }: { role: "user" | "assistant"; conten
   );
 }
 
-function ChatUI() {
-  const messages = useLiveQuery(() => db.chat.orderBy("createdAt").toArray(), []) ?? [];
+export default function CoachPage() {
+  const queryClient = useQueryClient();
+  const { data: messages, isPending, isError, error } = useChat();
+  const clearChat = useClearChat();
+
   const [input, setInput] = useState("");
-  const [pending, setPending] = useState("");
+  const [pendingUser, setPendingUser] = useState("");
+  const [pendingAssistant, setPendingAssistant] = useState("");
   const [streaming, setStreaming] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   async function send(text: string) {
     const trimmed = text.trim();
     if (!trimmed || streaming) return;
 
     setInput("");
-    setError(null);
-    await db.chat.add({ role: "user", content: trimmed, createdAt: Date.now() });
-
+    setSendError(null);
+    setPendingUser(trimmed);
     setStreaming(true);
-    setPending("");
+    setPendingAssistant("");
+
     try {
-      const settings = await db.settings.get("settings");
-      const apiKey = settings?.geminiApiKey;
-      if (!apiKey) throw new Error("No Google AI Studio API key configured.");
-
-      const [sessions, techniques] = await Promise.all([db.sessions.toArray(), db.techniques.toArray()]);
-      const summary = buildCoachSummary(sessions, techniques, settings);
-
-      const allMessages = await db.chat.orderBy("createdAt").toArray();
-      const history = allMessages.slice(-20).map((m) => ({ role: m.role, content: m.content }));
-
       let full = "";
-      for await (const chunk of askCoach({ apiKey, summary, history })) {
+      await streamCoach(trimmed, (chunk) => {
         full += chunk;
-        setPending(full);
-      }
-
-      await db.chat.add({ role: "assistant", content: full, createdAt: Date.now() });
-      setPending("");
+        setPendingAssistant(full);
+      });
+      await queryClient.invalidateQueries({ queryKey: ["chat"] });
+      setPendingUser("");
+      setPendingAssistant("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setSendError(err instanceof Error ? err.message : String(err));
     } finally {
       setStreaming(false);
     }
   }
 
   async function handleClear() {
-    await db.chat.clear();
+    await clearChat.mutateAsync();
+    setPendingUser("");
+    setPendingAssistant("");
+    setSendError(null);
   }
+
+  const hasMessages = (messages && messages.length > 0) || pendingUser;
 
   return (
     <div className="flex flex-col gap-4">
@@ -115,7 +112,20 @@ function ChatUI() {
       />
 
       <div className="flex h-[calc(100dvh-16rem)] flex-col gap-3 overflow-y-auto">
-        {messages.length === 0 && !pending && (
+        {isPending && (
+          <div className="flex flex-col gap-3">
+            <Skeleton className="ml-auto h-10 w-2/3 rounded-3xl" />
+            <Skeleton className="h-16 w-3/4 rounded-3xl" />
+          </div>
+        )}
+
+        {isError && (
+          <Alert variant="destructive">
+            <AlertDescription>{error instanceof Error ? error.message : "Could not load chat."}</AlertDescription>
+          </Alert>
+        )}
+
+        {!isPending && !hasMessages && (
           <div className="flex flex-1 flex-col gap-4">
             <Empty>
               <EmptyHeader>
@@ -135,15 +145,15 @@ function ChatUI() {
           </div>
         )}
 
-        {messages.map((m) => (
-          <Bubble key={m.id} role={m.role} content={m.content} />
-        ))}
+        {!isPending && messages?.map((m) => <Bubble key={m.id} role={m.role} content={m.content} />)}
 
-        {streaming && <Bubble role="assistant" content={pending || "…"} caption="Thinking" />}
+        {pendingUser && <Bubble role="user" content={pendingUser} />}
 
-        {error && (
+        {streaming && <Bubble role="assistant" content={pendingAssistant || "…"} caption="Thinking" />}
+
+        {sendError && (
           <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription>{sendError}</AlertDescription>
           </Alert>
         )}
       </div>
@@ -178,32 +188,4 @@ function ChatUI() {
       </div>
     </div>
   );
-}
-
-export default function CoachPage() {
-  const settings =
-    useLiveQuery(() => db.settings.get("settings").then((s) => s ?? DEFAULT_SETTINGS), []) ?? DEFAULT_SETTINGS;
-
-  if (!settings.geminiApiKey) {
-    return (
-      <div className="flex flex-col gap-4">
-        <PageHeader title="Coach." lead="Ask about your training, get one clear focus." />
-        <Card>
-          <Empty>
-            <EmptyHeader>
-              <EmptyTitle>Add a Google AI Studio API key</EmptyTitle>
-              <EmptyDescription>
-                The coach needs a free Google AI Studio API key to talk to you. Add one in Settings to get started.
-              </EmptyDescription>
-            </EmptyHeader>
-            <EmptyContent>
-              <Button nativeButton={false} render={<Link to="/settings" />}>Go to Settings</Button>
-            </EmptyContent>
-          </Empty>
-        </Card>
-      </div>
-    );
-  }
-
-  return <ChatUI />;
 }
