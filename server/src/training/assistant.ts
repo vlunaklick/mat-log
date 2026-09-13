@@ -9,29 +9,13 @@ import {
 import { z } from "zod";
 import { db, schema, eq, and, desc, sql } from "../db/index.ts";
 import { env } from "../env.ts";
-import { draftDataSchema, payloadSchema } from "./validation.ts";
+import { coachOutputSchema, coachGenerationSchema } from "./coach-output.ts";
+export { coachOutputSchema } from "./coach-output.ts";
 import { getState } from "./store.ts";
 import { searchCatalog, catalogSources } from "./catalog.ts";
 import { buildCoachSummary } from "../../../src/lib/stats.ts";
 import { sessionToApi } from "../routes/sessions.ts";
 import { techniqueToApi } from "../routes/techniques.ts";
-export const coachOutputSchema = z.object({
-  reply: z.string().min(1).max(16000),
-  draft: z
-    .object({
-      targetId: z.string().nullable(),
-      data: draftDataSchema,
-      questions: z.array(z.string().max(1000)).max(5),
-    })
-    .nullable(),
-  proposal: z
-    .object({
-      title: z.string().max(300),
-      reason: z.string().max(4000),
-      payload: payloadSchema,
-    })
-    .nullable(),
-});
 export const COACH_SYSTEM = `Sos el coach de BJJ de Mat Log. Respondé en el idioma del usuario, con consejos concretos basados en su historia. No supongas edad, cinturón, antigüedad, medidas ni capacidades. Tu evaluación de compatibilidad del gameplan es una hipótesis que se prueba entrenando, no una certeza sobre el cuerpo del usuario. No diagnostiques lesiones.
 
 REGLAS DE DATOS:
@@ -119,7 +103,7 @@ export async function respond(
     );
   const { output } = await generateText({
     model,
-    output: Output.object({ schema: coachOutputSchema }),
+    output: Output.object({ schema: coachGenerationSchema }),
     stopWhen: stepCountIs(7),
     maxOutputTokens: 12000,
     abortSignal: AbortSignal.timeout(120000),
