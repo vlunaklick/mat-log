@@ -70,8 +70,6 @@ export interface Session {
 }
 
 export interface Settings {
-  id: "settings";
-  geminiApiKey?: string;
   beltStartDate?: string; // YYYY-MM-DD, when the user started training
   weeklyGoalSessions: number;
 }
