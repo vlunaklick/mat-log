@@ -10,10 +10,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Textarea } from "@/components/ui/textarea";
-import { Field, FieldGroup, FieldLabel, FieldDescription } from "@/components/ui/field";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { POSITION_LABELS, TECHNIQUE_TYPE_LABELS } from "@/lib/labels";
+import { Blank } from "@/features/training/shared";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,7 +38,7 @@ export default function TechniqueEditorPage() {
   if (techniqueId && isPending) {
     return (
       <div className="mx-auto flex w-full max-w-[720px] flex-col gap-8">
-        <PageHeader title="Technique." />
+        <PageHeader title="Editar técnica" back={{ to: "/techniques", label: "Técnicas" }} />
         <Skeleton className="h-96 rounded-3xl" />
       </div>
     );
@@ -46,9 +48,9 @@ export default function TechniqueEditorPage() {
 
   if (techniqueId && !technique) {
     return (
-      <div className="flex flex-col gap-8">
-        <PageHeader title="Technique." />
-        <p className="text-muted-foreground">Technique not found.</p>
+      <div className="mx-auto flex w-full max-w-[720px] flex-col gap-8">
+        <PageHeader title="Técnica" back={{ to: "/techniques", label: "Técnicas" }} />
+        <Blank title="No encontramos esta técnica" />
       </div>
     );
   }
@@ -90,11 +92,11 @@ function TechniqueForm({
     try {
       if (technique?.id) {
         const saved = await update.mutateAsync({ id: technique.id, ...payload });
-        toast("Technique saved.");
+        toast("Técnica guardada");
         navigate(`/techniques/${saved.id}`);
       } else {
         const saved = await create.mutateAsync(payload);
-        toast("Technique saved.");
+        toast("Técnica guardada");
         navigate(`/techniques/${saved.id}`);
       }
     } catch {
@@ -105,82 +107,83 @@ function TechniqueForm({
   async function handleDelete() {
     if (!technique?.id) return;
     await remove.mutateAsync(technique.id);
-    toast("Technique deleted.");
+    toast("Técnica eliminada");
     navigate("/techniques");
   }
 
   return (
     <div className="mx-auto flex w-full max-w-[720px] flex-col gap-8">
-      <PageHeader title={technique ? "Edit technique." : "New technique."} />
+      <PageHeader title={technique ? "Editar técnica" : "Nueva técnica"} back={{ to: "/techniques", label: "Técnicas" }} />
       {technique?.id && <TechniqueJourney id={technique.id} />}
 
       {saveError && (
         <Alert variant="destructive">
-          <AlertDescription>{saveError instanceof Error ? saveError.message : "Could not save technique."}</AlertDescription>
+          <AlertDescription>{saveError instanceof Error ? saveError.message : "No se pudo guardar la técnica."}</AlertDescription>
         </Alert>
       )}
 
       <FieldGroup>
         <Field>
-          <FieldLabel htmlFor="name">Name</FieldLabel>
-          <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Armbar from mount" />
+          <FieldLabel htmlFor="name">Nombre</FieldLabel>
+          <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej: kimura desde media guardia" />
         </Field>
 
-        <Field>
-          <FieldLabel htmlFor="position">Position</FieldLabel>
-          <Select value={position} onValueChange={(v) => setPosition(v as Position)}>
-            <SelectTrigger id="position" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {POSITIONS.map((p) => (
-                <SelectItem key={p} value={p}>
-                  {p}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
+        <div className="grid gap-5 md:grid-cols-2">
+          <Field>
+            <FieldLabel htmlFor="position">Posición</FieldLabel>
+            <Select items={POSITION_LABELS} value={position} onValueChange={(v) => setPosition(v as Position)}>
+              <SelectTrigger id="position" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {POSITIONS.map((p) => (
+                  <SelectItem key={p} value={p}>
+                    {POSITION_LABELS[p]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+
+          <Field>
+            <FieldLabel htmlFor="type">Tipo</FieldLabel>
+            <Select items={TECHNIQUE_TYPE_LABELS} value={type} onValueChange={(v) => setType(v as TechniqueType)}>
+              <SelectTrigger id="type" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {TECHNIQUE_TYPES.map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {TECHNIQUE_TYPE_LABELS[t]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        </div>
 
         <Field>
-          <FieldLabel htmlFor="type">Type</FieldLabel>
-          <Select value={type} onValueChange={(v) => setType(v as TechniqueType)}>
-            <SelectTrigger id="type" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {TECHNIQUE_TYPES.map((t) => (
-                <SelectItem key={t} value={t}>
-                  {t}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-
-        <Field>
-          <FieldLabel htmlFor="steps">Steps</FieldLabel>
+          <FieldLabel htmlFor="steps">Pasos</FieldLabel>
           <Textarea id="steps" value={steps} onChange={(e) => setSteps(e.target.value)} placeholder="1. ... 2. ..." />
         </Field>
 
         <Field>
-          <FieldLabel htmlFor="details">Details</FieldLabel>
+          <FieldLabel htmlFor="details">Detalles</FieldLabel>
           <Textarea
             id="details"
             value={details}
             onChange={(e) => setDetails(e.target.value)}
-            placeholder="the small things that make it work"
+            placeholder="Lo que hace que funcione"
           />
-          <FieldDescription>Shown on the back of the flashcard.</FieldDescription>
         </Field>
 
         <Field>
-          <FieldLabel htmlFor="mistakes">Mistakes</FieldLabel>
-          <Textarea id="mistakes" value={mistakes} onChange={(e) => setMistakes(e.target.value)} placeholder="common mistakes" />
+          <FieldLabel htmlFor="mistakes">Errores comunes</FieldLabel>
+          <Textarea id="mistakes" value={mistakes} onChange={(e) => setMistakes(e.target.value)} />
         </Field>
 
         <Field>
-          <FieldLabel htmlFor="video">Video URL</FieldLabel>
+          <FieldLabel htmlFor="video">Video</FieldLabel>
           <InputGroup>
             <InputGroupInput id="video" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://..." type="url" />
             <InputGroupAddon align="inline-end">
@@ -188,6 +191,7 @@ function TechniqueForm({
                 type="button"
                 variant="ghost"
                 size="icon-sm"
+                aria-label="Abrir video"
                 disabled={!videoUrl.trim()}
                 nativeButton={false}
                 render={<a href={videoUrl.trim() || undefined} target="_blank" rel="noreferrer" />}
@@ -199,28 +203,30 @@ function TechniqueForm({
         </Field>
       </FieldGroup>
 
-      <div className="flex flex-col gap-2 md:flex-row-reverse">
+      <div className="flex flex-col gap-2 md:flex-row md:items-center">
         <Button onClick={handleSave} disabled={!name.trim() || saving}>
-          {saving ? "Saving…" : "Save"}
+          {saving ? "Guardando…" : "Guardar"}
+        </Button>
+        <Button type="button" variant="ghost" onClick={() => navigate(-1)}>
+          Cancelar
         </Button>
         {technique?.id && (
           <AlertDialog>
-            <AlertDialogTrigger render={<Button variant="destructive" />}>Delete</AlertDialogTrigger>
+            <AlertDialogTrigger render={<Button variant="destructive" className="mt-6 md:mt-0 md:ml-auto" />}>
+              Eliminar
+            </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Delete "{technique.name}"?</AlertDialogTitle>
-                <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
+                <AlertDialogTitle>¿Eliminar «{technique.name}»?</AlertDialogTitle>
+                <AlertDialogDescription>No se puede deshacer.</AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDelete}>Eliminar</AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
         )}
-        <Button type="button" variant="ghost" onClick={() => navigate(-1)}>
-          Cancel
-        </Button>
       </div>
     </div>
   );

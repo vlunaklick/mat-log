@@ -1,8 +1,15 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { toast } from "sonner";
 import type { Draft, DraftData } from "@/lib/training";
 import { STAGE_LABELS } from "@/lib/training";
 import { POSITIONS, TECHNIQUE_TYPES } from "@/lib/types";
+import {
+  OUTCOME_LABELS,
+  POSITION_LABELS,
+  TECHNIQUE_TYPE_LABELS,
+  label,
+} from "@/lib/labels";
 import { useDraft, useTrainingActions } from "./queries";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
@@ -14,7 +21,6 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from "@/components/ui/card";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ErrorNotice, Loading } from "./shared";
@@ -52,7 +58,10 @@ function DraftEditor({ initial }: { initial: Draft }) {
       const saved = await actions.saveDraft.mutateAsync(draft);
       if (confirm) {
         const confirmed = await actions.confirm.mutateAsync(saved);
+        toast("Clase confirmada");
         navigate(`/session/${confirmed.sessionId}`);
+      } else {
+        toast("Borrador guardado");
       }
     } catch (e) {
       setError(e);
@@ -60,83 +69,114 @@ function DraftEditor({ initial }: { initial: Draft }) {
   }
   if (initial.status === "confirmed")
     return (
-      <div className="flex flex-col gap-5">
-        <PageHeader title="Clase confirmada." lead={initial.data.classTopic} />
-        <p>
-          Este borrador ya se convirtió en una clase. Las modificaciones se
-          hacen en el registro confirmado.
+      <div className="flex flex-col gap-6">
+        <PageHeader
+          title="Clase confirmada"
+          lead={initial.data.classTopic}
+          back={{ to: "/drafts", label: "Borradores" }}
+          action={
+            initial.sessionId ? (
+              <Button
+                nativeButton={false}
+                render={<Link to={`/session/${initial.sessionId}`} />}
+              >
+                Ver clase
+              </Button>
+            ) : undefined
+          }
+        />
+        <p className="text-muted-foreground">
+          {initial.sessionId
+            ? "Los cambios se hacen desde la clase."
+            : "La clase vinculada fue eliminada."}
         </p>
-        {initial.sessionId ? (
-          <Button
-            nativeButton={false}
-            render={<Link to={`/session/${initial.sessionId}`} />}
-          >
-            Ver clase
-          </Button>
-        ) : (
-          <p>La clase vinculada fue eliminada.</p>
-        )}
-        <details>
-          <summary>Relato original y preguntas</summary>
-          <p className="whitespace-pre-wrap">{initial.sourceText}</p>
-          {initial.questions.map((q) => (
-            <p key={q}>{q}</p>
-          ))}
+        <details className="rounded-3xl bg-surface p-5">
+          <summary className="cursor-pointer text-title">
+            Relato original
+          </summary>
+          <p className="mt-3 whitespace-pre-wrap text-sm">
+            {initial.sourceText}
+          </p>
+          {initial.questions.length > 0 && (
+            <ul className="mt-3 flex list-disc flex-col gap-1 pl-5 text-sm text-muted-foreground">
+              {initial.questions.map((q) => (
+                <li key={q}>{q}</li>
+              ))}
+            </ul>
+          )}
         </details>
       </div>
     );
+  const toCoach = (
+    <Button
+      variant="outline"
+      disabled={busy}
+      onClick={async () => {
+        try {
+          await actions.saveDraft.mutateAsync(draft);
+          navigate(
+            `/coach${draft.conversationId ? `/${draft.conversationId}` : ""}?draft=${draft.id}`,
+          );
+        } catch (e) {
+          setError(e);
+        }
+      }}
+    >
+      {draft.questions.length ? "Responder al coach" : "Seguir con el coach"}
+    </Button>
+  );
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Revisá tu clase."
-        lead="Los campos vacíos quedan sin registrar. Podés confirmar con preguntas pendientes."
+        title="Revisar clase"
+        back={{ to: "/drafts", label: "Borradores" }}
+        action={draft.questions.length ? undefined : toCoach}
       />
-      <Card>
-        <CardHeader>
-          <CardTitle>Preguntas pendientes</CardTitle>
-          <CardDescription>
-            Respondé al coach con texto o audio, o corregí los datos abajo.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          {draft.questions.length ? (
-            draft.questions.map((q, i) => <p key={i}>{q}</p>)
-          ) : (
-            <p>No hay preguntas pendientes.</p>
-          )}
-          <Button
-            variant="outline"
-            disabled={busy}
-            onClick={async () => {
-              try {
-                await actions.saveDraft.mutateAsync(draft);
-                navigate(
-                  `/coach${draft.conversationId ? `/${draft.conversationId}` : ""}?draft=${draft.id}`,
-                );
-              } catch (e) {
-                setError(e);
-              }
-            }}
-          >
-            Guardar y responder al coach
-          </Button>
-        </CardContent>
-      </Card>
+      {draft.questions.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Preguntas del coach</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col items-start gap-4">
+            <ul className="flex list-disc flex-col gap-2 pl-5">
+              {draft.questions.map((q, i) => (
+                <li key={i}>{q}</li>
+              ))}
+            </ul>
+            {toCoach}
+          </CardContent>
+        </Card>
+      )}
       <Card>
         <CardHeader>
           <CardTitle>Datos de la clase</CardTitle>
         </CardHeader>
         <CardContent>
           <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="draft-date">Fecha de la clase</FieldLabel>
-              <Input
-                id="draft-date"
-                type="date"
-                value={draft.data.date ?? ""}
-                onChange={(e) => patch({ date: e.target.value || null })}
-              />
-            </Field>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field>
+                <FieldLabel htmlFor="draft-date">Fecha</FieldLabel>
+                <Input
+                  id="draft-date"
+                  type="date"
+                  value={draft.data.date ?? ""}
+                  onChange={(e) => patch({ date: e.target.value || null })}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="draft-duration">Duración (min)</FieldLabel>
+                <Input
+                  id="draft-duration"
+                  type="number"
+                  min={0}
+                  max={1440}
+                  value={draft.data.durationMin ?? ""}
+                  onChange={(e) =>
+                    patch({ durationMin: numberOrNull(e.target.value) })
+                  }
+                />
+              </Field>
+            </div>
             <Field>
               <FieldLabel>Modalidad</FieldLabel>
               <ToggleGroup
@@ -150,22 +190,7 @@ function DraftEditor({ initial }: { initial: Draft }) {
               </ToggleGroup>
             </Field>
             <Field>
-              <FieldLabel htmlFor="draft-duration">
-                Duración en minutos, si la recordás
-              </FieldLabel>
-              <Input
-                id="draft-duration"
-                type="number"
-                min={0}
-                max={1440}
-                value={draft.data.durationMin ?? ""}
-                onChange={(e) =>
-                  patch({ durationMin: numberOrNull(e.target.value) })
-                }
-              />
-            </Field>
-            <Field>
-              <FieldLabel>Energía, opcional</FieldLabel>
+              <FieldLabel>Energía</FieldLabel>
               <ToggleGroup
                 value={draft.data.energy ? [String(draft.data.energy)] : []}
                 onValueChange={(v) =>
@@ -183,7 +208,7 @@ function DraftEditor({ initial }: { initial: Draft }) {
             </Field>
             {(
               [
-                ["classTopic", "Qué trabajaron"],
+                ["classTopic", "Tema de la clase"],
                 ["whatWorked", "Qué funcionó"],
                 ["whatFailed", "Qué te costó"],
                 ["nextFocus", "Foco para la próxima clase"],
@@ -203,16 +228,11 @@ function DraftEditor({ initial }: { initial: Draft }) {
         </CardContent>
       </Card>
       <div className="flex flex-col gap-4">
-        <h2 className="text-h2">Técnicas de esta clase.</h2>
+        <h2 className="text-h3">Técnicas</h2>
         {draft.data.techniques.map((t, i) => (
           <Card key={i}>
             <CardHeader>
-              <CardTitle>{t.name}</CardTitle>
-              <CardDescription>
-                {t.identification === "tentative"
-                  ? "Identificación provisional. Conservá un nombre descriptivo si no estás seguro."
-                  : "Identificación confirmada"}
-              </CardDescription>
+              <CardTitle>{t.name || "Técnica"}</CardTitle>
             </CardHeader>
             <CardContent>
               <FieldGroup>
@@ -242,7 +262,9 @@ function DraftEditor({ initial }: { initial: Draft }) {
                     }
                   >
                     {POSITIONS.map((p) => (
-                      <option key={p}>{p}</option>
+                      <option key={p} value={p}>
+                        {POSITION_LABELS[p]}
+                      </option>
                     ))}
                   </select>
                 </Field>
@@ -259,12 +281,14 @@ function DraftEditor({ initial }: { initial: Draft }) {
                     }
                   >
                     {TECHNIQUE_TYPES.map((p) => (
-                      <option key={p}>{p}</option>
+                      <option key={p} value={p}>
+                        {TECHNIQUE_TYPE_LABELS[p]}
+                      </option>
                     ))}
                   </select>
                 </Field>
                 <Field>
-                  <FieldLabel>Experiencia en esta clase</FieldLabel>
+                  <FieldLabel>Experiencia</FieldLabel>
                   <ToggleGroup
                     className="flex-wrap"
                     value={[t.stage]}
@@ -300,9 +324,7 @@ function DraftEditor({ initial }: { initial: Draft }) {
                   </ToggleGroup>
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor={`notes-${i}`}>
-                    Detalles que recordás
-                  </FieldLabel>
+                  <FieldLabel htmlFor={`notes-${i}`}>Notas</FieldLabel>
                   <Textarea
                     id={`notes-${i}`}
                     value={t.notes}
@@ -315,7 +337,7 @@ function DraftEditor({ initial }: { initial: Draft }) {
                   {(["attempts", "successes"] as const).map((k) => (
                     <Field key={k}>
                       <FieldLabel htmlFor={`${k}-${i}`}>
-                        {k === "attempts" ? "Intentos" : "Éxitos"}, opcional
+                        {k === "attempts" ? "Intentos" : "Éxitos"}
                       </FieldLabel>
                       <Input
                         id={`${k}-${i}`}
@@ -333,6 +355,7 @@ function DraftEditor({ initial }: { initial: Draft }) {
                 </div>
                 <Button
                   variant="ghost"
+                  className="self-start"
                   onClick={() =>
                     patch({
                       techniques: draft.data.techniques.filter(
@@ -341,7 +364,7 @@ function DraftEditor({ initial }: { initial: Draft }) {
                     })
                   }
                 >
-                  Quitar del borrador
+                  Quitar técnica
                 </Button>
               </FieldGroup>
             </CardContent>
@@ -349,6 +372,7 @@ function DraftEditor({ initial }: { initial: Draft }) {
         ))}
         <Button
           variant="outline"
+          className="self-start"
           onClick={() =>
             patch({
               techniques: [
@@ -378,10 +402,9 @@ function DraftEditor({ initial }: { initial: Draft }) {
         <CardContent className="flex flex-col gap-4">
           {draft.data.rolls.map((r, i) => (
             <FieldGroup key={i}>
+              <p className="text-sm font-medium">Roll {i + 1}</p>
               <Field>
-                <FieldLabel htmlFor={`partner-${i}`}>
-                  Compañero {i + 1}
-                </FieldLabel>
+                <FieldLabel htmlFor={`partner-${i}`}>Compañero</FieldLabel>
                 <Input
                   id={`partner-${i}`}
                   value={r.partnerName ?? ""}
@@ -409,11 +432,14 @@ function DraftEditor({ initial }: { initial: Draft }) {
                 />
               </Field>
               <p className="text-sm text-muted-foreground">
-                Resultado: {r.outcome} · Dificultad:{" "}
-                {r.stuckIn ?? "Sin registrar"}
+                Resultado: {label(OUTCOME_LABELS, r.outcome)}
+                {r.stuckIn
+                  ? ` · Te costó: ${label(POSITION_LABELS, r.stuckIn)}`
+                  : ""}
               </p>
               <Button
                 variant="ghost"
+                className="self-start"
                 onClick={() =>
                   patch({ rolls: draft.data.rolls.filter((_, j) => i !== j) })
                 }
@@ -422,26 +448,41 @@ function DraftEditor({ initial }: { initial: Draft }) {
               </Button>
             </FieldGroup>
           ))}
-          {!draft.data.rolls.length && <p>No registraste rolls.</p>}
+          {!draft.data.rolls.length && (
+            <p className="text-muted-foreground">Sin rolls.</p>
+          )}
         </CardContent>
       </Card>
-      <details className="rounded-3xl bg-surface p-4">
-        <summary className="cursor-pointer">Tu relato original</summary>
+      <details className="rounded-3xl bg-surface p-5">
+        <summary className="cursor-pointer text-title">Relato original</summary>
         <p className="mt-3 whitespace-pre-wrap text-sm">{draft.sourceText}</p>
       </details>
       <ErrorNotice error={error} />
-      <div className="flex flex-wrap gap-2">
-        <Button disabled={busy || !draft.data.date} onClick={() => save(true)}>
-          {busy ? "Guardando…" : "Confirmar clase"}
-        </Button>
-        <Button variant="outline" disabled={busy} onClick={() => save()}>
-          Guardar borrador
-        </Button>
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button
+            disabled={busy || !draft.data.date}
+            onClick={() => save(true)}
+          >
+            {busy ? "Guardando…" : "Confirmar clase"}
+          </Button>
+          <Button variant="outline" disabled={busy} onClick={() => save()}>
+            Guardar borrador
+          </Button>
+        </div>
+        {!draft.data.date && (
+          <p className="text-sm text-muted-foreground">
+            Completá la fecha para confirmar.
+          </p>
+        )}
+      </div>
+      <div className="mt-6 flex flex-col items-start gap-2">
         <ConfirmDelete
           label="Eliminar borrador"
-          description="Se elimina este borrador. El chat original se conserva."
+          description="El chat original se conserva."
           onConfirm={async () => {
             await actions.removeDraft.mutateAsync(draft.id);
+            toast("Borrador eliminado");
             navigate("/drafts");
           }}
         />

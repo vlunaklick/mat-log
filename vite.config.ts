@@ -15,7 +15,7 @@ export default defineConfig({
       manifest: {
         name: "Mat Log",
         short_name: "Mat Log",
-        description: "BJJ training journal, technique review and progress tracker",
+        description: "Diario de entrenamiento de BJJ: clases, técnicas y progreso",
         theme_color: "#ffffff",
         background_color: "#ffffff",
         display: "standalone",

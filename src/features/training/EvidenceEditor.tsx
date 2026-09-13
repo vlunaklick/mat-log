@@ -18,7 +18,7 @@ export function EvidenceEditor({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Práctica confirmada</CardTitle>
+        <CardTitle>Detalle por técnica</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
         {value.map((e, i) => {

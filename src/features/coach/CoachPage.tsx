@@ -7,7 +7,7 @@ import {
 } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { todayISO } from "@/lib/date";
+import { formatTimestamp, todayISO } from "@/lib/date";
 import type { Conversation, Draft } from "@/lib/training";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
@@ -24,62 +24,71 @@ import {
 import { Blank, ErrorNotice, Loading } from "../training/shared";
 import { ProposalCard } from "../training/ProposalCard";
 
+const SUGGESTIONS = [
+  "¿En qué me enfoco la próxima clase?",
+  "¿Dónde me estoy trabando en los rolls?",
+  "Revisá mi semana",
+];
+
 export default function CoachPage() {
   const { id } = useParams();
   const [params] = useSearchParams();
-  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const conversations = useConversations(useDeferredValue(query));
+  const current = id && conversations.data?.find((c) => c.id === id);
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Tu coach."
-        lead="Tu entrenamiento, con memoria."
+        title="Coach"
+        lead={current ? current.title : undefined}
+        back={id ? { to: "/coach", label: "Conversaciones" } : undefined}
         action={
-          <Button onClick={() => navigate(`/coach?new=${crypto.randomUUID()}`)}>
-            Nueva conversación
-          </Button>
+          id && (
+            <Button
+              variant="outline"
+              nativeButton={false}
+              render={<Link to="/coach" />}
+            >
+              Nueva conversación
+            </Button>
+          )
         }
       />
-      <details className="rounded-3xl bg-surface p-4" open={!id}>
-        <summary className="cursor-pointer text-sm font-medium">
-          Historial de conversaciones
-        </summary>
-        <div className="mt-4 flex flex-col gap-3">
+      <ConversationView key={id ?? params.get("new") ?? "new"} id={id} />
+      {!id && (query || !!conversations.data?.length) && (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-title">Conversaciones</h2>
           <Input
-            aria-label="Buscar en todos los chats"
-            placeholder="Buscar en todos los chats…"
+            aria-label="Buscar en tus conversaciones"
+            placeholder="Buscar…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
           <ErrorNotice error={conversations.error} />
           {conversations.isPending ? (
             <Loading />
-          ) : (
-            <div className="flex max-h-56 flex-col gap-1 overflow-y-auto">
-              {conversations.data?.map((c) => (
+          ) : conversations.data?.length ? (
+            <div className="flex flex-col">
+              {conversations.data.map((c) => (
                 <Link
                   key={c.id}
                   to={`/coach/${c.id}`}
-                  className="flex items-center justify-between gap-3 rounded-2xl p-3 hover:bg-background"
-                  aria-current={id === c.id ? "page" : undefined}
+                  className="flex items-center justify-between gap-3 rounded-2xl p-3 hover:bg-surface"
                 >
                   <span className="truncate">{c.title}</span>
                   <span className="shrink-0 text-xs text-muted-foreground">
-                    {new Date(c.updatedAt).toLocaleDateString()}
+                    {formatTimestamp(c.updatedAt)}
                   </span>
                 </Link>
               ))}
-              {!conversations.data?.length && (
-                <p className="text-sm text-muted-foreground">
-                  No hay conversaciones que coincidan.
-                </p>
-              )}
             </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No hay conversaciones que coincidan.
+            </p>
           )}
-        </div>
-      </details>
-      <ConversationView key={id ?? params.get("new") ?? "new"} id={id} />
+        </section>
+      )}
     </div>
   );
 }
@@ -144,17 +153,32 @@ function ConversationView({ id }: { id?: string }) {
         <Blank
           title={
             mode === "log"
-              ? "Contame la clase."
+              ? "Contame la clase"
               : mode === "profile"
-                ? "Conozcamos tu recorrido."
+                ? "Contame tu recorrido"
                 : mode === "gameplan"
-                  ? "Pensemos tu juego."
-                  : "Una conversación que continúa."
+                  ? "Pensemos tu juego"
+                  : "¿En qué te ayudo?"
+          }
+          action={
+            mode === "chat" && (
+              <div className="flex flex-wrap justify-center gap-2">
+                {SUGGESTIONS.map((text) => (
+                  <Button
+                    key={text}
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setInput(text)}
+                  >
+                    {text}
+                  </Button>
+                ))}
+              </div>
+            )
           }
         >
-          {mode === "log"
-            ? "Hablá o escribí. Armo un borrador y te pregunto lo que falte."
-            : "Podés hablar de tus clases, objetivos o planes. Los cambios importantes se confirman con vos."}
+          {mode === "log" &&
+            "Hablá o escribí. Armo un borrador y te pregunto lo que falte."}
         </Blank>
       )}
       {createdId && messages.isPending && <Loading />}
@@ -172,7 +196,7 @@ function ConversationView({ id }: { id?: string }) {
               {m.content}
             </p>
             <p className="mt-2 text-xs opacity-60">
-              {new Date(m.createdAt).toLocaleString()}
+              {formatTimestamp(m.createdAt)}
             </p>
           </div>
         ))}
@@ -231,15 +255,14 @@ function ConversationView({ id }: { id?: string }) {
         }}
         onSend={() => send.mutate()}
         busy={send.isPending}
-        label={
-          selected ? "Respondé lo que recuerdes" : "Escribí o grabá un audio"
+        placeholder={
+          selected
+            ? "Respondé lo que recuerdes…"
+            : mode === "log"
+              ? "Hoy practicamos… Me costó… Quiero trabajar…"
+              : "Escribí o grabá un audio…"
         }
       />
-      <p className="text-xs text-muted-foreground">
-        El coach puede recuperar chats y clases anteriores. Los borradores
-        quedan pendientes; perfil, objetivos y gameplans cambian cuando
-        confirmás una propuesta.
-      </p>
     </div>
   );
 }

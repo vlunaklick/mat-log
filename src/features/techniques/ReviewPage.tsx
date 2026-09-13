@@ -2,14 +2,17 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useTechniqueMutations, useTechniques, useSessions } from "@/lib/queries";
 import type { Grade } from "@/lib/srs";
+import { POSITION_LABELS, TECHNIQUE_TYPE_LABELS } from "@/lib/labels";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Empty, EmptyHeader, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Blank } from "@/features/training/shared";
+
+const BACK = { to: "/techniques", label: "Técnicas" };
 
 export default function ReviewPage() {
   const sessions = useSessions();
@@ -26,7 +29,7 @@ export default function ReviewPage() {
   if (isPending || sessions.isPending) {
     return (
       <div className="mx-auto flex w-full max-w-[560px] flex-col gap-6">
-        <PageHeader title="Review." />
+        <PageHeader title="Repaso" back={BACK} />
         <Skeleton className="h-64 rounded-3xl" />
       </div>
     );
@@ -39,23 +42,20 @@ export default function ReviewPage() {
 
   if (dueTechniques.length === 0) {
     return (
-      <div className="flex flex-col gap-8">
-        <PageHeader title="Review." />
-        <Empty>
-          <EmptyHeader>
-            <EmptyTitle>All caught up.</EmptyTitle>
-            <EmptyDescription>No techniques are due for review right now.</EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
-            <Button nativeButton={false} render={<Link to="/techniques" />}>Back to techniques</Button>
-          </EmptyContent>
-        </Empty>
+      <div className="mx-auto flex w-full max-w-[560px] flex-col gap-6">
+        <PageHeader title="Repaso" back={BACK} />
+        <Blank title="No hay técnicas para repasar" />
       </div>
     );
   }
 
   const current = dueTechniques[0];
   const total = doneCount + dueTechniques.length;
+  const notes = [
+    { title: "Pasos", text: current.steps },
+    { title: "Detalles", text: current.details },
+    { title: "Errores comunes", text: current.mistakes },
+  ].filter((n) => n.text?.trim());
 
   async function grade(g: Grade) {
     if (!current?.id) return;
@@ -68,64 +68,69 @@ export default function ReviewPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-[560px] flex-col gap-6">
-      <PageHeader title="Review." />
+      <PageHeader title="Repaso" back={BACK} />
 
       {review.isError && (
         <Alert variant="destructive">
           <AlertDescription>
-            {review.error instanceof Error ? review.error.message : "Could not save review."}
+            {review.error instanceof Error ? review.error.message : "No se pudo guardar el repaso."}
           </AlertDescription>
         </Alert>
       )}
 
       <div className="flex flex-col gap-2">
         <Progress value={total > 0 ? (doneCount / total) * 100 : 0} />
-        <p className="text-sm text-muted-foreground">{dueTechniques.length} left</p>
+        <p className="text-sm text-muted-foreground">
+          {dueTechniques.length === 1 ? "Queda 1" : `Quedan ${dueTechniques.length}`}
+        </p>
       </div>
 
       <Card key={current.id} className="gap-6 p-5">
         <div className="flex flex-col gap-2">
           <h2 className="text-h2">{current.name}</h2>
           <div className="flex flex-wrap gap-2">
-            <Badge variant="secondary">{current.position}</Badge>
-            <Badge variant="outline">{current.type}</Badge>
+            <Badge variant="secondary">{POSITION_LABELS[current.position]}</Badge>
+            <Badge variant="outline">{TECHNIQUE_TYPE_LABELS[current.type]}</Badge>
           </div>
         </div>
 
         {!showBack ? (
           <>
-            <p className="text-muted-foreground">Recall the steps and key details.</p>
+            <p className="text-muted-foreground">Recordá los pasos y los detalles clave.</p>
             <Button className="w-full" size="lg" onClick={() => setShowBack(true)}>
-              Show
+              Ver respuesta
             </Button>
           </>
         ) : (
           <>
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1">
-                <h3 className="text-label text-muted-foreground">Steps</h3>
-                <p className="whitespace-pre-wrap text-sm">{current.steps || "—"}</p>
+            {notes.length > 0 ? (
+              <div className="flex flex-col gap-4">
+                {notes.map((n) => (
+                  <div key={n.title} className="flex flex-col gap-1">
+                    <h3 className="text-label text-muted-foreground">{n.title}</h3>
+                    <p className="whitespace-pre-wrap text-sm">{n.text}</p>
+                  </div>
+                ))}
               </div>
-              <div className="flex flex-col gap-1">
-                <h3 className="text-label text-muted-foreground">Details</h3>
-                <p className="whitespace-pre-wrap text-sm">{current.details || "—"}</p>
-              </div>
-              <div className="flex flex-col gap-1">
-                <h3 className="text-label text-muted-foreground">Mistakes</h3>
-                <p className="whitespace-pre-wrap text-sm">{current.mistakes || "—"}</p>
-              </div>
-            </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Sin notas.{" "}
+                <Link to={`/techniques/${current.id}`} className="text-foreground underline">
+                  Agregalas
+                </Link>
+              </p>
+            )}
 
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <Button variant="outline" disabled={review.isPending} onClick={() => grade("again")}>
-                Again
+                Otra vez
               </Button>
               <Button variant="outline" disabled={review.isPending} onClick={() => grade("hard")}>
-                Hard
+                Difícil
               </Button>
-              <Button disabled={review.isPending} onClick={() => grade("good")}>Good</Button>
+              <Button disabled={review.isPending} onClick={() => grade("good")}>Bien</Button>
               <Button variant="secondary" disabled={review.isPending} onClick={() => grade("easy")}>
-                Easy
+                Fácil
               </Button>
             </div>
           </>

@@ -98,7 +98,7 @@ test("partial draft explicitly preserves unknown values", () => {
 test("catalog contains sourced records and supports aliases and gi filtering", () => {
   assert.ok(catalog.length > 1700);
   assert.ok(
-    searchCatalog("camaron").entries.some((e) => e.name.includes("shrimp")),
+    searchCatalog("shrimp").entries.some((e) => e.name.includes("camarón")),
   );
   assert.ok(
     searchCatalog("", "gi", "all", 0, 2000).entries.every(

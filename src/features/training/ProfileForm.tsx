@@ -3,13 +3,15 @@ import { Link } from "react-router-dom";
 import type { Profile, TrainingState } from "@/lib/training";
 import { trainingDays } from "@/lib/training";
 import { todayISO } from "@/lib/date";
+import { BELT_LABELS } from "@/lib/labels";
+import { X } from "lucide-react";
 import { useTraining, useTrainingActions } from "./queries";
 import { Button } from "@/components/ui/button";
 import {
   Card,
   CardHeader,
   CardTitle,
-  CardDescription,
+  CardAction,
   CardContent,
   CardFooter,
 } from "@/components/ui/card";
@@ -33,25 +35,24 @@ function ProfileEditor({ initial }: { initial: TrainingState }) {
     <Card>
       <CardHeader>
         <CardTitle>Tu recorrido</CardTitle>
-        <CardDescription>
-          Todo es opcional. El coach usa estos datos confirmados para
-          contextualizar sus propuestas.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <FieldGroup>
+        <CardAction>
           <Button
             variant="outline"
+            size="sm"
             nativeButton={false}
             render={
               <Link to="/coach?mode=profile&prompt=Ayudame%20a%20completar%20mi%20perfil%20de%20entrenamiento.%20Preguntame%20de%20a%20una%20cosa." />
             }
           >
-            Completar conversando con el coach
+            Completar con el coach
           </Button>
+        </CardAction>
+      </CardHeader>
+      <CardContent>
+        <FieldGroup>
           <Field>
             <FieldLabel htmlFor="profile-start">
-              Día que empezaste a entrenar
+              Empezaste a entrenar
             </FieldLabel>
             <Input
               id="profile-start"
@@ -88,8 +89,8 @@ function ProfileEditor({ initial }: { initial: TrainingState }) {
           {(
             [
               ["preferences", "Cómo te gusta pelear"],
-              ["ambitions", "Qué querés conseguir o competir"],
-              ["limitations", "Limitaciones que quieras contar"],
+              ["ambitions", "Objetivos y competencias"],
+              ["limitations", "Lesiones o limitaciones"],
             ] as const
           ).map(([key, label]) => (
             <Field key={key}>
@@ -120,13 +121,7 @@ function ProfileEditor({ initial }: { initial: TrainingState }) {
                     })
                   }
                 >
-                  {[
-                    ["white", "Blanco"],
-                    ["blue", "Azul"],
-                    ["purple", "Violeta"],
-                    ["brown", "Marrón"],
-                    ["black", "Negro"],
-                  ].map(([v, l]) => (
+                  {Object.entries(BELT_LABELS).map(([v, l]) => (
                     <option key={v} value={v}>
                       {l}
                     </option>
@@ -150,11 +145,14 @@ function ProfileEditor({ initial }: { initial: TrainingState }) {
               </Field>
               <Button
                 variant="ghost"
+                size="icon"
+                className="size-11"
+                aria-label="Quitar cinturón"
                 onClick={() =>
                   patch({ belts: profile.belts.filter((_, j) => j !== i) })
                 }
               >
-                Quitar
+                <X />
               </Button>
             </div>
           ))}
@@ -166,7 +164,7 @@ function ProfileEditor({ initial }: { initial: TrainingState }) {
           >
             Agregar cinturón
           </Button>
-          <h3 className="text-title">Parones</h3>
+          <h3 className="text-title">Pausas</h3>
           {profile.breaks.map((b, i) => (
             <FieldGroup key={i}>
               <div className="grid grid-cols-2 gap-3">
@@ -187,7 +185,7 @@ function ProfileEditor({ initial }: { initial: TrainingState }) {
                 </Field>
                 <Field>
                   <FieldLabel htmlFor={`break-end-${i}`}>
-                    Regreso, vacío si sigue
+                    Vuelta (vacía si sigue)
                   </FieldLabel>
                   <Input
                     id={`break-end-${i}`}
@@ -203,30 +201,33 @@ function ProfileEditor({ initial }: { initial: TrainingState }) {
                   />
                 </Field>
               </div>
-              <Field>
-                <FieldLabel htmlFor={`break-reason-${i}`}>
-                  Motivo, opcional
-                </FieldLabel>
-                <Input
-                  id={`break-reason-${i}`}
-                  value={b.reason}
-                  onChange={(e) =>
-                    patch({
-                      breaks: profile.breaks.map((x, j) =>
-                        i === j ? { ...x, reason: e.target.value } : x,
-                      ),
-                    })
+              <div className="flex items-end gap-2">
+                <Field className="flex-1">
+                  <FieldLabel htmlFor={`break-reason-${i}`}>Motivo</FieldLabel>
+                  <Input
+                    id={`break-reason-${i}`}
+                    value={b.reason}
+                    onChange={(e) =>
+                      patch({
+                        breaks: profile.breaks.map((x, j) =>
+                          i === j ? { ...x, reason: e.target.value } : x,
+                        ),
+                      })
+                    }
+                  />
+                </Field>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-11"
+                  aria-label="Quitar pausa"
+                  onClick={() =>
+                    patch({ breaks: profile.breaks.filter((_, j) => j !== i) })
                   }
-                />
-              </Field>
-              <Button
-                variant="ghost"
-                onClick={() =>
-                  patch({ breaks: profile.breaks.filter((_, j) => j !== i) })
-                }
-              >
-                Quitar parón
-              </Button>
+                >
+                  <X />
+                </Button>
+              </div>
             </FieldGroup>
           ))}
           <Button
@@ -240,13 +241,13 @@ function ProfileEditor({ initial }: { initial: TrainingState }) {
               })
             }
           >
-            Agregar parón
+            Agregar pausa
           </Button>
           {days && (
             <p className="text-sm text-muted-foreground">
-              {days.elapsed} días desde el inicio · {days.paused} de parón ·{" "}
-              {days.active} descontando pausas. Esto no equivale a días
-              asistidos.
+              {days.paused > 0
+                ? `${days.active.toLocaleString("es")} días activos desde que empezaste (${days.paused.toLocaleString("es")} en pausa)`
+                : `${days.elapsed.toLocaleString("es")} días desde que empezaste`}
             </p>
           )}
           <ErrorNotice error={update.error} />

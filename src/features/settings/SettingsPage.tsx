@@ -8,9 +8,8 @@ import { useSettings, useUpdateSettings } from "@/lib/queries";
 import type { Settings } from "@/lib/types";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -35,16 +34,30 @@ function SettingsForm({ initial }: { initial: Settings }) {
   const [pendingImportFile, setPendingImportFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  async function handleSave() {
-    await updateSettings.mutateAsync({
-      beltStartDate: beltStartDate || undefined,
-      weeklyGoalSessions: Math.min(7, Math.max(1, weeklyGoalSessions)),
-    });
-    toast("Saved");
+  // Saves on pick; reverts the toggle if the request fails.
+  async function handleGoalChange(value: string[]) {
+    const goal = Number(value[0]);
+    if (!goal) return;
+    setWeeklyGoalSessions(goal);
+    try {
+      await updateSettings.mutateAsync({
+        beltStartDate: beltStartDate || undefined,
+        weeklyGoalSessions: Math.min(7, Math.max(1, goal)),
+      });
+      toast("Meta semanal guardada");
+    } catch {
+      setWeeklyGoalSessions(initial.weeklyGoalSessions);
+    }
   }
 
   async function handleExport() {
-    const data = await api.get<unknown>("/api/export");
+    let data: unknown;
+    try {
+      data = await api.get<unknown>("/api/export");
+    } catch {
+      toast.error("No se pudo exportar el backup");
+      return;
+    }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -78,7 +91,7 @@ function SettingsForm({ initial }: { initial: Settings }) {
       const data = JSON.parse(text);
       await api.post<void>("/api/import", data);
       await queryClient.invalidateQueries();
-      toast("Backup imported");
+      toast("Backup importado");
     } catch (err) {
       setImportError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -93,56 +106,53 @@ function SettingsForm({ initial }: { initial: Settings }) {
 
   return (
     <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6">
-      <PageHeader title="Settings." lead="Configure your training goals and your data." />
+      <PageHeader title="Perfil" />
 
       <ProfileForm />
+
       <Card>
         <CardHeader>
-          <CardTitle>Training</CardTitle>
+          <CardTitle>Meta semanal</CardTitle>
+          <CardDescription>Clases por semana.</CardDescription>
         </CardHeader>
-        <CardContent>
-          <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="weekly-goal">Weekly goal (sessions)</FieldLabel>
-              <Input
-                id="weekly-goal"
-                type="number"
-                min={1}
-                max={7}
-                value={weeklyGoalSessions}
-                onChange={(e) => setWeeklyGoalSessions(Number(e.target.value))}
-              />
-            </Field>
-          </FieldGroup>
+        <CardContent className="flex flex-col gap-3">
+          <ToggleGroup
+            aria-label="Meta semanal"
+            variant="outline"
+            spacing={1}
+            className="w-full"
+            value={[String(weeklyGoalSessions)]}
+            onValueChange={handleGoalChange}
+            disabled={updateSettings.isPending}
+          >
+            {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+              <ToggleGroupItem key={n} value={String(n)} className="min-w-0 flex-1">
+                {n}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+          {updateSettings.isError && (
+            <Alert variant="destructive">
+              <AlertDescription>
+                {updateSettings.error instanceof Error ? updateSettings.error.message : "No se pudo guardar la meta."}
+              </AlertDescription>
+            </Alert>
+          )}
         </CardContent>
       </Card>
 
-      <div>
-        <Button onClick={handleSave} disabled={updateSettings.isPending}>
-          {updateSettings.isPending ? "Saving…" : "Save"}
-        </Button>
-      </div>
-
-      {updateSettings.isError && (
-        <Alert variant="destructive">
-          <AlertDescription>
-            {updateSettings.error instanceof Error ? updateSettings.error.message : "Could not save settings."}
-          </AlertDescription>
-        </Alert>
-      )}
-
       <Card>
         <CardHeader>
-          <CardTitle>Data</CardTitle>
+          <CardTitle>Datos</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={handleExport}>
-                Export backup
+                Exportar backup
               </Button>
               <Button variant="outline" onClick={handleImportClick} disabled={importing}>
-                {importing ? "Importing..." : "Import backup"}
+                {importing ? "Importando…" : "Importar backup"}
               </Button>
               <input ref={fileInputRef} type="file" accept="application/json" className="hidden" onChange={handleFileSelected} />
             </div>
@@ -161,14 +171,16 @@ function SettingsForm({ initial }: { initial: Settings }) {
             >
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Replace all current data?</AlertDialogTitle>
+                  <AlertDialogTitle>¿Reemplazar tus datos?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Un backup v3 reemplaza clases, técnicas, perfil, objetivos, gameplans, borradores y chats. Los backups anteriores reemplazan clases y técnicas; conservan los chats y borradores. Exportá una copia antes de continuar.
+                    Reemplaza todos tus datos actuales por los del archivo. Exportá una copia antes.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={confirmImport}>Import</AlertDialogAction>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction variant="destructive" onClick={confirmImport}>
+                    Importar
+                  </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
@@ -176,11 +188,9 @@ function SettingsForm({ initial }: { initial: Settings }) {
         </CardContent>
       </Card>
 
-      <Button variant="outline" onClick={handleSignOut}>
-        Sign out
+      <Button variant="outline" className="sm:self-start" onClick={handleSignOut}>
+        Cerrar sesión
       </Button>
-
-      <p className="text-center text-xs text-text-faint">Mat Log · v0.1</p>
     </div>
   );
 }
@@ -191,7 +201,7 @@ export default function SettingsPage() {
   if (isPending || !settings) {
     return (
       <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6">
-        <PageHeader title="Settings." lead="Configure your training goals and your data." />
+        <PageHeader title="Perfil" />
         <Skeleton className="h-48 rounded-3xl" />
         <Skeleton className="h-32 rounded-3xl" />
       </div>

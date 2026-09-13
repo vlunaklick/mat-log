@@ -5,10 +5,12 @@ import { StatTile } from "@/components/app/stat-tile";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useDrafts } from "../training/queries";
+import { Blank } from "../training/shared";
 import { formatDate, todayISO } from "../../lib/date";
+import { STYLE_LABELS } from "../../lib/labels";
 import type { Session } from "../../lib/types";
 
 function startOfWeekISO(iso: string): string {
@@ -39,6 +41,8 @@ function computeStreakWeeks(sessions: Session[]): number {
 export default function JournalPage() {
   const { data: sessions, isPending, isError, error } = useSessions();
   const { data: settings } = useSettings();
+  const { data: drafts } = useDrafts();
+  const pendingDrafts = (drafts ?? []).filter((d) => d.status === "draft").length;
 
   const weeklyGoal = settings?.weeklyGoalSessions ?? 3;
   const currentWeekStart = startOfWeekISO(todayISO());
@@ -48,23 +52,30 @@ export default function JournalPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Journal."
-        lead="One line per class. Be honest."
+        title="Diario"
         action={
-          <Button nativeButton={false} render={<Link to="/coach?mode=log" />}>Log today's class</Button>
+          <>
+            <Button variant="outline" nativeButton={false} render={<Link to="/session/new" />}>Registro manual</Button>
+            <Button nativeButton={false} render={<Link to="/coach?mode=log" />}>Contar mi clase</Button>
+          </>
         }
       />
 
       {isError && (
         <Alert variant="destructive">
-          <AlertDescription>{error instanceof Error ? error.message : "Could not load sessions."}</AlertDescription>
+          <AlertDescription>{error instanceof Error ? error.message : "No se pudieron cargar las clases."}</AlertDescription>
         </Alert>
       )}
 
-      <div className="flex gap-2"><Button variant="outline" nativeButton={false} render={<Link to="/drafts" />}>Borradores</Button><Button variant="ghost" nativeButton={false} render={<Link to="/session/new" />}>Registro manual</Button></div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <StatTile label="This week" value={`${sessionsThisWeek} / ${weeklyGoal}`} hint="sessions" />
-        <StatTile label="Streak" value={streakWeeks} hint={`week${streakWeeks === 1 ? "" : "s"}`} highlight={streakWeeks >= 2} />
+      {drafts && drafts.length > 0 && (
+        <Link to="/drafts" className="-mt-2 w-fit text-sm text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline">
+          Borradores{pendingDrafts > 0 ? ` · ${pendingDrafts} sin confirmar` : ""}
+        </Link>
+      )}
+
+      <div className="grid grid-cols-2 gap-3">
+        <StatTile label="Esta semana" value={`${sessionsThisWeek} / ${weeklyGoal}`} hint="clases" />
+        <StatTile label="Racha" value={streakWeeks} hint={streakWeeks === 1 ? "semana" : "semanas"} highlight={streakWeeks >= 2} />
       </div>
 
       {isPending ? (
@@ -73,12 +84,10 @@ export default function JournalPage() {
           <Skeleton className="h-32 rounded-3xl" />
         </div>
       ) : !sessions || sessions.length === 0 ? (
-        <Empty>
-          <EmptyHeader>
-            <EmptyTitle>No sessions yet.</EmptyTitle>
-            <EmptyDescription>Log your first class to get started.</EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+        <Blank
+          title="Todavía no registraste clases"
+          action={<Button nativeButton={false} render={<Link to="/coach?mode=log" />}>Contar mi primera clase</Button>}
+        />
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
           {sessions.map((s) => (
@@ -87,16 +96,16 @@ export default function JournalPage() {
                 <CardHeader>
                   <div className="flex items-center justify-between gap-2">
                     <CardTitle>{formatDate(s.date)}</CardTitle>
-                    <Badge variant="outline">{s.style === "gi" ? "GI" : s.style === "nogi" ? "NO-GI" : "Sin modalidad"}</Badge>
+                    <Badge variant="outline">{s.style ? STYLE_LABELS[s.style] : "Sin modalidad"}</Badge>
                   </div>
                   <CardDescription>
-                    {s.durationMin === null ? "Duración pendiente" : `${s.durationMin} min`} &middot; {s.rolls.length} roll{s.rolls.length === 1 ? "" : "s"}
+                    {s.durationMin === null ? "Sin duración" : `${s.durationMin} min`} &middot; {s.rolls.length} roll{s.rolls.length === 1 ? "" : "s"}
                   </CardDescription>
                 </CardHeader>
                 {(s.classTopic || s.nextFocus) && (
                   <CardContent className="flex flex-col gap-1">
                     {s.classTopic && <p className="text-sm text-foreground">{s.classTopic}</p>}
-                    {s.nextFocus && <p className="text-sm text-brand">Next: {s.nextFocus}</p>}
+                    {s.nextFocus && <p className="text-sm text-muted-foreground">Próximo foco: {s.nextFocus}</p>}
                   </CardContent>
                 )}
               </Card>

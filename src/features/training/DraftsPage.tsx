@@ -1,4 +1,6 @@
 import { Link } from "react-router-dom";
+import { formatDate } from "@/lib/date";
+import { STYLE_LABELS } from "@/lib/labels";
 import { useDrafts } from "./queries";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
@@ -16,11 +18,11 @@ export default function DraftsPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Borradores."
-        lead="No hace falta acordarte de todo para guardar una clase."
+        title="Borradores"
+        back={{ to: "/journal", label: "Diario" }}
         action={
           <Button nativeButton={false} render={<Link to="/coach?mode=log" />}>
-            Contar una clase
+            Contar mi clase
           </Button>
         }
       />
@@ -28,33 +30,39 @@ export default function DraftsPage() {
       {drafts.isPending ? (
         <Loading />
       ) : !drafts.data?.length ? (
-        <Blank title="Tu próxima clase empieza con una nota.">
-          Hablá o escribí al coach. Tu borrador quedará acá, incluso con
-          preguntas pendientes.
+        <Blank title="No tenés borradores">
+          Cuando le cuentes una clase al coach, el borrador aparece acá hasta
+          que lo confirmes.
         </Blank>
       ) : (
         drafts.data.map((d) => (
           <Card key={d.id}>
             <CardHeader>
-              <Badge variant="outline">
-                {d.status === "draft" ? "Pendiente" : "Confirmada"}
+              <Badge variant={d.status === "draft" ? "secondary" : "outline"}>
+                {d.status === "draft" ? "Sin confirmar" : "Confirmada"}
               </Badge>
               <CardTitle>
-                {d.data.classTopic || "Clase por completar"}
+                {d.data.classTopic || "Clase sin tema"}
               </CardTitle>
               <CardDescription>
-                {d.data.date ?? "Fecha por completar"} ·{" "}
-                {d.data.style ?? "Modalidad pendiente"} · {d.questions.length}{" "}
-                preguntas
+                {[
+                  d.data.date ? formatDate(d.data.date) : "Sin fecha",
+                  d.data.style ? STYLE_LABELS[d.data.style] : "Sin modalidad",
+                  d.status === "draft" && d.questions.length
+                    ? `${d.questions.length} ${d.questions.length === 1 ? "pregunta" : "preguntas"}`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
               </CardDescription>
             </CardHeader>
             <CardFooter>
               <Button
-                variant="outline"
+                variant={d.status === "draft" ? "outline" : "ghost"}
                 nativeButton={false}
                 render={<Link to={`/drafts/${d.id}`} />}
               >
-                {d.status === "draft" ? "Retomar borrador" : "Ver registro"}
+                {d.status === "draft" ? "Revisar" : "Ver"}
               </Button>
             </CardFooter>
           </Card>

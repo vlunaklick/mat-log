@@ -56,7 +56,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <SidebarMenu>
                 {NAV.map((item) => (
                   <SidebarMenuItem key={item.to}>
-                    <SidebarMenuButton isActive={item.match(pathname)} tooltip={item.label} className="rounded-full" render={<NavLink to={item.to} />}>
+                    <SidebarMenuButton isActive={item.match(pathname)} tooltip={item.label} className="rounded-full" render={<NavLink to={item.to} end={item.to === "/"} />}>
                       <item.icon />
                       <span>{item.label}</span>
                     </SidebarMenuButton>
@@ -69,9 +69,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         <SidebarFooter className="px-2 py-2">
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton tooltip="Sign out" className="rounded-full" onClick={handleSignOut}>
+              <SidebarMenuButton tooltip="Salir" className="rounded-full" onClick={handleSignOut}>
                 <LogOut />
-                <span>Sign out</span>
+                <span>Salir</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
@@ -87,18 +87,20 @@ export function AppShell({ children }: { children: ReactNode }) {
 
 function MobileNav({ pathname }: { pathname: string }) {
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-[max(env(safe-area-inset-bottom),12px)] md:hidden pointer-events-none">
-      <div className="pointer-events-auto flex w-full max-w-lg items-center justify-between rounded-full bg-surface p-1.5">
+    <nav className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-3 pb-[max(env(safe-area-inset-bottom),12px)] md:hidden pointer-events-none">
+      <div className="pointer-events-auto flex w-full max-w-lg items-center justify-between rounded-full bg-surface p-1">
         {NAV.map((item) => {
           const active = item.match(pathname);
           return (
             <NavLink
               key={item.to}
               to={item.to}
+              end={item.to === "/"}
               aria-label={item.label}
               className={cn(
-                "flex h-12 flex-1 flex-col items-center justify-center gap-0.5 rounded-full text-[11px] font-medium transition-colors",
-                active ? "bg-primary text-primary-foreground" : "text-muted-foreground",
+                // 7 items fit a 360px screen: the active pill sizes to its label, the rest share the space at >=44px.
+                "flex h-12 flex-col items-center justify-center gap-0.5 rounded-full text-[11px] font-medium transition-colors",
+                active ? "flex-none bg-primary px-3 text-primary-foreground" : "min-w-11 flex-1 text-muted-foreground",
               )}
             >
               <item.icon className="size-5" />

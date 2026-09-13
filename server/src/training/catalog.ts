@@ -4,24 +4,28 @@ import { STARTER } from "../seed-data.ts";
 const imported = JSON.parse(
   readFileSync(new URL("../data/catalog.json", import.meta.url), "utf8"),
 ) as { entries: CatalogEntry[]; commit: string };
-const aliases: Record<string, string[]> = {
-  "Hip escape (shrimp)": ["camarón", "camaron", "escape de cadera"],
-  "Bridge and roll (upa)": ["puente", "upa"],
-  "Scissor sweep": ["barrido tijera"],
-  "Hip bump sweep": ["barrido de cadera"],
-  "Cross collar choke": ["estrangulación cruzada", "solapas"],
-  "Armbar from closed guard": ["palanca de brazo", "armbar guardia cerrada"],
-  "Rear naked choke": ["mata león", "mataleon"],
-  "Knee cut pass": ["pase de rodilla", "knee slice"],
-  "Side control escape to guard": ["escape de lateral"],
-};
+/** Indexed like STARTER; English names stay searchable. */
+const aliases: string[][] = [
+  ["hip escape", "shrimp", "camaron"],
+  ["bridge and roll", "puente"],
+  ["elbow-knee escape"],
+  ["side control escape", "escape de lateral"],
+  ["scissor sweep"],
+  ["hip bump sweep"],
+  ["cross collar choke", "solapas"],
+  ["armbar", "armlock"],
+  ["knee cut", "knee slice", "pase de rodilla"],
+  ["guard retention"],
+  ["rear naked choke", "rnc", "mataleon"],
+  ["double leg", "double leg takedown"],
+];
 const starters: CatalogEntry[] = STARTER.map((t, i) => ({
   id: `ml-${i}`,
   name: t.name,
-  aliases: aliases[t.name] ?? [],
+  aliases: aliases[i] ?? [],
   position: t.position,
   type: t.type,
-  style: /collar|Scissor|Knee cut/.test(t.name) ? "gi" : "both",
+  style: /cruzada|tijera|knee cut/i.test(t.name) ? "gi" : "both",
   description: `${t.steps}\n\n${t.details}\n\nErrores comunes: ${t.mistakes}`,
   tags: [],
   source: "Mat Log",

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Empty,
+  EmptyContent,
   EmptyHeader,
   EmptyTitle,
   EmptyDescription,
@@ -29,16 +30,19 @@ export function Loading() {
 export function Blank({
   title,
   children,
+  action,
 }: {
   title: string;
-  children: ReactNode;
+  children?: ReactNode;
+  action?: ReactNode;
 }) {
   return (
-    <Empty>
+    <Empty className="rounded-3xl bg-surface">
       <EmptyHeader>
         <EmptyTitle>{title}</EmptyTitle>
-        <EmptyDescription>{children}</EmptyDescription>
+        {children ? <EmptyDescription>{children}</EmptyDescription> : null}
       </EmptyHeader>
+      {action ? <EmptyContent>{action}</EmptyContent> : null}
     </Empty>
   );
 }

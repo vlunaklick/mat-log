@@ -26,7 +26,7 @@ export function ConfirmDelete({
   return (
     <>
       <AlertDialog>
-        <AlertDialogTrigger render={<Button variant="ghost" disabled={busy} />}>
+        <AlertDialogTrigger render={<Button variant="destructive" disabled={busy} />}>
           {label}
         </AlertDialogTrigger>
         <AlertDialogContent>

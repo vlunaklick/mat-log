@@ -5,27 +5,30 @@ import { useSessions } from "@/lib/queries";
 import { techniqueProgress, STAGE_LABELS } from "@/lib/training";
 import { useTechniques } from "@/lib/queries";
 import { POSITIONS, type Position } from "@/lib/types";
+import { POSITION_LABELS } from "@/lib/labels";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Empty, EmptyHeader, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Blank } from "@/features/training/shared";
 
 export default function TechniquesPage() {
   const sessions = useSessions();
   const [libraryView, setLibraryView] = useState("learned");
   const practicedIds = new Set(sessions.data?.flatMap(s => s.techniqueIds) ?? []);
+  const evidence = sessions.data?.flatMap(s => s.evidence ?? []) ?? [];
   const [query, setQuery] = useState("");
   const [position, setPosition] = useState<Position | "all">("all");
 
   const { data: techniques, isPending, isError, error } = useTechniques();
   const now = Date.now();
-  const dueCount = techniques?.filter((t) => !t.archived && practicedIds.has(t.id!) && t.dueAt <= now).length ?? 0;
+  const isDue = (t: { id?: number; dueAt: number }) => practicedIds.has(t.id!) && t.dueAt <= now;
+  const dueCount = techniques?.filter((t) => !t.archived && isDue(t)).length ?? 0;
+  const hasFilters = position !== "all" || query.trim() !== "";
 
   const filtered = (techniques ?? []).filter((t) => {
     if (t.archived) return false;
@@ -43,34 +46,49 @@ export default function TechniquesPage() {
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
-        title="Techniques."
+        title="Técnicas"
         action={
-          <Button nativeButton={false} render={<Link to="/techniques/new" />}>Add technique</Button>
+          <>
+            <Button variant="outline" nativeButton={false} render={<Link to="/explore" />}>
+              Explorar catálogo
+            </Button>
+            <Button nativeButton={false} render={<Link to="/techniques/new" />}>
+              Nueva técnica
+            </Button>
+          </>
         }
       />
 
       {isError && (
         <Alert variant="destructive">
-          <AlertDescription>{error instanceof Error ? error.message : "Could not load techniques."}</AlertDescription>
+          <AlertDescription>{error instanceof Error ? error.message : "No se pudieron cargar las técnicas."}</AlertDescription>
         </Alert>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3"><ToggleGroup value={[libraryView]} onValueChange={v => v[0] && setLibraryView(v[0])}><ToggleGroupItem value="learned">Mi recorrido</ToggleGroupItem><ToggleGroupItem value="saved">Todas las guardadas</ToggleGroupItem></ToggleGroup><Button variant="outline" nativeButton={false} render={<Link to="/explore" />}>Explorar catálogo</Button></div>
-      <Card className="bg-surface ring-0">
-        <div className="flex flex-col gap-4 px-5 md:flex-row md:items-center md:justify-between">
-          <p className="text-lead">
-            <span className="text-brand text-h2 font-heading">{dueCount}</span> due for review
-          </p>
-          <Button size="lg" disabled={dueCount === 0} nativeButton={false} render={<Link to="/review" />}>
-            {dueCount === 0 ? "Nothing due" : "Review now"}
-          </Button>
-        </div>
-      </Card>
+      {dueCount > 0 && (
+        <Card className="bg-surface ring-0">
+          <div className="flex flex-col gap-4 px-5 md:flex-row md:items-center md:justify-between">
+            <p className="text-lead">
+              <span className="text-brand text-h2 font-heading">{dueCount}</span>{" "}
+              {dueCount === 1 ? "técnica para repasar" : "técnicas para repasar"}
+            </p>
+            <Button variant="outline" nativeButton={false} render={<Link to="/review" />}>
+              Repasar
+            </Button>
+          </div>
+        </Card>
+      )}
 
       <div className="flex flex-col gap-4">
+        <ToggleGroup aria-label="Vista" value={[libraryView]} onValueChange={(v) => v[0] && setLibraryView(v[0])}>
+          <ToggleGroupItem value="learned">Practicadas</ToggleGroupItem>
+          <ToggleGroupItem value="saved">Todas</ToggleGroupItem>
+        </ToggleGroup>
+
         <InputGroup>
           <InputGroupInput
-            placeholder="Search techniques…"
+            aria-label="Buscar técnicas"
+            placeholder="Buscar técnicas…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -80,15 +98,16 @@ export default function TechniquesPage() {
         </InputGroup>
 
         <ToggleGroup
+          aria-label="Posición"
           variant="outline"
           value={[position]}
           onValueChange={(v) => setPosition(((v[0] as Position | "all") ?? "all"))}
-          className="flex-wrap justify-start"
+          className="-mx-4 w-auto justify-start overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:flex-wrap md:px-0"
         >
-          <ToggleGroupItem value="all">All</ToggleGroupItem>
+          <ToggleGroupItem value="all">Todas</ToggleGroupItem>
           {POSITIONS.map((p) => (
             <ToggleGroupItem key={p} value={p}>
-              {p}
+              {POSITION_LABELS[p]}
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
@@ -100,40 +119,54 @@ export default function TechniquesPage() {
           <Skeleton className="h-24 rounded-3xl" />
         </div>
       ) : groups.length === 0 ? (
-        <Empty>
-          <EmptyHeader>
-            <EmptyTitle>No techniques found.</EmptyTitle>
-            <EmptyDescription>Las técnicas aparecen acá al confirmar tus clases. Podés ver las referencias guardadas o explorar el catálogo.</EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+        hasFilters ? (
+          <Blank
+            title="Sin resultados"
+            action={
+              <Button variant="outline" onClick={() => { setQuery(""); setPosition("all"); }}>
+                Limpiar filtros
+              </Button>
+            }
+          />
+        ) : libraryView === "learned" ? (
+          <Blank
+            title="Todavía no practicaste técnicas"
+            action={
+              <Button variant="outline" onClick={() => setLibraryView("saved")}>
+                Ver todas
+              </Button>
+            }
+          >
+            Aparecen acá cuando confirmás una clase.
+          </Blank>
+        ) : (
+          <Blank
+            title="Tu biblioteca está vacía"
+            action={
+              <Button variant="outline" nativeButton={false} render={<Link to="/explore" />}>
+                Explorar catálogo
+              </Button>
+            }
+          />
+        )
       ) : (
         <div className="flex flex-col gap-8">
           {groups.map((g) => (
             <div key={g.position} className="flex flex-col gap-3">
-              <h2 className="text-label text-muted-foreground">{g.position}</h2>
-              <Card className="md:hidden">
-                {g.items.map((t, i) => (
-                  <div key={t.id}>
-                    {i > 0 ? <Separator /> : null}
-                    <Link to={`/techniques/${t.id}`} className="flex items-center justify-between gap-2 px-5 py-3">
-                      <div className="flex flex-col gap-1">
-                        <span className="text-sm font-medium">{t.name}</span>
-                        <Badge variant="secondary">{practicedIds.has(t.id!) ? STAGE_LABELS[techniqueProgress(sessions.data?.flatMap(s => s.evidence ?? []).filter(e => e.techniqueId === t.id) ?? [])] : "Guardada para explorar"}</Badge>
-                      </div>
-                      {t.dueAt <= now && <Badge variant="outline">Due</Badge>}
-                    </Link>
-                  </div>
-                ))}
-              </Card>
-              <div className="hidden gap-3 md:grid md:grid-cols-2">
+              <h2 className="text-label text-muted-foreground">{POSITION_LABELS[g.position]}</h2>
+              <div className="grid gap-3 md:grid-cols-2">
                 {g.items.map((t) => (
                   <Link key={t.id} to={`/techniques/${t.id}`}>
                     <Card className="flex-row items-center justify-between gap-2 px-5">
-                      <div className="flex flex-col gap-1">
+                      <div className="flex flex-col items-start gap-1">
                         <span className="text-sm font-medium">{t.name}</span>
-                        <Badge variant="secondary">{practicedIds.has(t.id!) ? STAGE_LABELS[techniqueProgress(sessions.data?.flatMap(s => s.evidence ?? []).filter(e => e.techniqueId === t.id) ?? [])] : "Guardada para explorar"}</Badge>
+                        <Badge variant="secondary">
+                          {practicedIds.has(t.id!)
+                            ? STAGE_LABELS[techniqueProgress(evidence.filter(e => e.techniqueId === t.id))]
+                            : "Guardada"}
+                        </Badge>
                       </div>
-                      {t.dueAt <= now && <Badge variant="outline">Due</Badge>}
+                      {isDue(t) && <Badge variant="outline">Para repasar</Badge>}
                     </Card>
                   </Link>
                 ))}

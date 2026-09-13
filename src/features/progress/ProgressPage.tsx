@@ -16,27 +16,32 @@ import {
   weeklyCounts,
 } from "@/lib/stats";
 import { formatDate, todayISO } from "@/lib/date";
+import { BELT_LABELS, OUTCOME_LABELS, POSITION_LABELS } from "@/lib/labels";
 import type { RollOutcome } from "@/lib/types";
 import { PageHeader } from "@/components/app/page-header";
 import { StatTile } from "@/components/app/stat-tile";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
-
-const OUTCOME_LABELS: Record<RollOutcome, string> = {
-  unknown: "Not recorded",
-  dominated: "Dominated",
-  won: "Won",
-  even: "Even",
-  lost: "Lost",
-  survived: "Survived",
-};
+import { Blank } from "@/features/training/shared";
 
 const OUTCOME_ORDER: RollOutcome[] = ["dominated", "won", "even", "lost", "survived", "unknown"];
-const STACK_COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)"];
+/** Six-step grayscale ladder, darkest for the best outcome, so no two outcomes share a color. */
+const OUTCOME_COLORS: Record<RollOutcome, string> = {
+  dominated: "var(--chart-1)",
+  won: "color-mix(in srgb, var(--chart-1) 55%, var(--chart-2))",
+  even: "var(--chart-2)",
+  lost: "var(--chart-3)",
+  survived: "var(--chart-4)",
+  unknown: "color-mix(in srgb, var(--chart-4) 45%, var(--background))",
+};
+
+/** Minutes as readable hours: "3,5 h". */
+function formatHours(minutes: number): string {
+  return `${(minutes / 60).toLocaleString("es", { maximumFractionDigits: 1 })} h`;
+}
 
 export default function ProgressPage() {
   const { data: sessions, isPending: sessionsPending, isError, error } = useSessions();
@@ -67,9 +72,9 @@ export default function ProgressPage() {
   if (isError) {
     return (
       <div className="flex flex-col gap-8">
-        <PageHeader title="Progress." lead="What the mat is telling you." />
+        <PageHeader title="Progreso" />
         <Alert variant="destructive">
-          <AlertDescription>{error instanceof Error ? error.message : "Could not load progress."}</AlertDescription>
+          <AlertDescription>{error instanceof Error ? error.message : "No se pudo cargar tu progreso."}</AlertDescription>
         </Alert>
       </div>
     );
@@ -78,7 +83,7 @@ export default function ProgressPage() {
   if (isPending || !sessions || !techniques) {
     return (
       <div className="flex flex-col gap-8">
-        <PageHeader title="Progress." lead="What the mat is telling you." />
+        <PageHeader title="Progreso" />
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Skeleton className="h-24 rounded-3xl" />
           <Skeleton className="h-24 rounded-3xl" />
@@ -93,14 +98,11 @@ export default function ProgressPage() {
   if (sessions.length === 0) {
     return (
       <div className="flex flex-col gap-8">
-        <PageHeader title="Progress." lead="What the mat is telling you." />
-        <Empty>
-          <EmptyHeader>
-            <EmptyTitle>No sessions logged yet.</EmptyTitle>
-            <EmptyDescription>Log your first class to start tracking progress.</EmptyDescription>
-          </EmptyHeader>
-          <Button nativeButton={false} render={<Link to="/" />}>Log today's class</Button>
-        </Empty>
+        <PageHeader title="Progreso" />
+        <Blank
+          title="Todavía no registraste clases"
+          action={<Button nativeButton={false} render={<Link to="/coach?mode=log" />}>Registrar clase</Button>}
+        />
       </div>
     );
   }
@@ -113,23 +115,31 @@ export default function ProgressPage() {
   const giPct = giTotal > 0 ? Math.round((stats.gn.gi / giTotal) * 100) : 0;
   const nogiPct = giTotal > 0 ? 100 - giPct : 0;
   const goalY = 100 - (weeklyGoal / maxWeekCount) * 90;
+  const withoutDuration = sessions.filter((s) => s.durationMin === null).length;
+  const topStuck = stats.stuck[0] ? POSITION_LABELS[stats.stuck[0].position] : null;
 
   return (
     <div className="flex flex-col gap-8">
-      <PageHeader title="Progress." lead="What the mat is telling you." />
+      <PageHeader title="Progreso" />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile label="Horas registradas" value={sessions?.some(s => s.durationMin !== null) ? stats.hours.toFixed(1) : "—"} hint={`${sessions?.filter(s => s.durationMin === null).length ?? 0} clases sin duración`} />
-        <StatTile label="Sessions" value={stats.count} />
-        <StatTile label="Week streak" value={stats.streak} highlight={stats.streak >= 2} />
-        <StatTile label="Last 30 days" value={stats.last30} />
+        <StatTile
+          label="Horas"
+          value={withoutDuration < sessions.length ? stats.hours.toLocaleString("es", { maximumFractionDigits: 1 }) : "—"}
+          hint={withoutDuration > 0 ? `${withoutDuration} ${withoutDuration === 1 ? "clase" : "clases"} sin duración` : undefined}
+        />
+        <StatTile label="Clases" value={stats.count} />
+        <StatTile label="Semanas seguidas" value={stats.streak} highlight={stats.streak >= 2} />
+        <StatTile label="Últimos 30 días" value={stats.last30} />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card className="md:col-span-2">
           <CardHeader>
-            <CardTitle>Last 12 weeks</CardTitle>
-            <CardDescription>Sessions per week against your weekly goal.</CardDescription>
+            <CardTitle>Últimas 12 semanas</CardTitle>
+            <CardDescription>
+              Clases por semana. La línea punteada es tu meta de {weeklyGoal}.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <svg viewBox="0 0 240 100" className="mt-2 h-28 w-full" preserveAspectRatio="none">
@@ -169,17 +179,16 @@ export default function ProgressPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Where you get stuck</CardTitle>
-            <CardDescription>Positions you tap or bail from most.</CardDescription>
+            <CardTitle>Dónde te trabás</CardTitle>
           </CardHeader>
           <CardContent>
             {stats.stuck.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No stuck positions logged yet.</p>
+              <p className="text-sm text-muted-foreground">Todavía no registraste posiciones.</p>
             ) : (
               <div className="flex flex-col gap-2">
                 {stats.stuck.map((p) => (
                   <div key={p.position} className="flex items-center gap-2">
-                    <span className="w-32 shrink-0 truncate text-sm text-muted-foreground">{p.position}</span>
+                    <span className="w-32 shrink-0 truncate text-sm text-muted-foreground">{POSITION_LABELS[p.position]}</span>
                     <div className="h-3 flex-1 overflow-hidden rounded-full bg-surface">
                       <div
                         className="h-full rounded-full"
@@ -191,39 +200,52 @@ export default function ProgressPage() {
                 ))}
               </div>
             )}
-            <p className="mt-3 text-xs text-text-faint">Ask your coach for escapes from your top position</p>
+            {topStuck ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-4"
+                nativeButton={false}
+                render={
+                  <Link
+                    to={`/coach?prompt=${encodeURIComponent(`La posición donde más me trabo: ${topStuck.toLowerCase()}. ¿Qué salidas me recomendás practicar?`)}`}
+                  />
+                }
+              >
+                Pedir escapes al coach
+              </Button>
+            ) : null}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Roll outcomes</CardTitle>
-            <CardDescription>How your rolls have gone overall.</CardDescription>
+            <CardTitle>Resultados de rolls</CardTitle>
           </CardHeader>
           <CardContent>
             {totalOutcomes === 0 ? (
-              <p className="text-sm text-muted-foreground">No rolls logged yet.</p>
+              <p className="text-sm text-muted-foreground">Todavía no registraste rolls.</p>
             ) : (
               <>
                 <div className="flex h-4 overflow-hidden rounded-full bg-surface">
-                  {OUTCOME_ORDER.map((k, i) =>
+                  {OUTCOME_ORDER.map((k) =>
                     stats.outcomes[k] > 0 ? (
                       <div
                         key={k}
                         style={{
                           width: `${(stats.outcomes[k] / totalOutcomes) * 100}%`,
-                          backgroundColor: STACK_COLORS[i % STACK_COLORS.length],
+                          backgroundColor: OUTCOME_COLORS[k],
                         }}
                       />
                     ) : null,
                   )}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
-                  {OUTCOME_ORDER.map((k, i) => (
+                  {OUTCOME_ORDER.map((k) => stats.outcomes[k] === 0 ? null : (
                     <span key={k} className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <span
                         className="squircle inline-block size-2"
-                        style={{ backgroundColor: STACK_COLORS[i % STACK_COLORS.length] }}
+                        style={{ backgroundColor: OUTCOME_COLORS[k] }}
                       />
                       {OUTCOME_LABELS[k]}: {stats.outcomes[k]}
                     </span>
@@ -236,16 +258,16 @@ export default function ProgressPage() {
               <table className="mt-4 w-full text-sm">
                 <thead>
                   <tr className="text-label text-muted-foreground">
-                    <th className="py-1 text-left font-medium">Belt</th>
+                    <th className="py-1 text-left font-medium">Compañero</th>
                     <th className="py-1 text-right font-medium">Rolls</th>
-                    <th className="py-1 text-right font-medium">Won/Dom</th>
-                    <th className="py-1 text-right font-medium">Lost/Surv</th>
+                    <th className="py-1 text-right font-medium">A favor</th>
+                    <th className="py-1 text-right font-medium">En contra</th>
                   </tr>
                 </thead>
                 <tbody>
                   {stats.byBelt.map((b) => (
                     <tr key={b.belt} className="border-t border-border-soft">
-                      <td className="py-1.5 capitalize">{b.belt}</td>
+                      <td className="py-1.5">{BELT_LABELS[b.belt]}</td>
                       <td className="py-1.5 text-right">{b.rolls}</td>
                       <td className="py-1.5 text-right">{b.wonOrDominated}</td>
                       <td className="py-1.5 text-right">{b.lostOrSurvived}</td>
@@ -259,21 +281,20 @@ export default function ProgressPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Gi vs no-gi</CardTitle>
-            <CardDescription>Where your mat minutes go.</CardDescription>
+            <CardTitle>Gi vs. no-gi</CardTitle>
           </CardHeader>
           <CardContent>
             {giTotal === 0 ? (
-              <p className="text-sm text-muted-foreground">No training minutes logged yet.</p>
+              <p className="text-sm text-muted-foreground">Todavía no hay clases con duración.</p>
             ) : (
               <>
                 <div className="flex items-center gap-6">
                   <div>
-                    <p className="text-h3">{stats.gn.gi}m</p>
+                    <p className="text-h3">{formatHours(stats.gn.gi)}</p>
                     <p className="text-xs text-muted-foreground">Gi ({giPct}%)</p>
                   </div>
                   <div>
-                    <p className="text-h3">{stats.gn.nogi}m</p>
+                    <p className="text-h3">{formatHours(stats.gn.nogi)}</p>
                     <p className="text-xs text-muted-foreground">No-gi ({nogiPct}%)</p>
                   </div>
                 </div>
@@ -288,12 +309,11 @@ export default function ProgressPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Most drilled</CardTitle>
-            <CardDescription>Techniques you've reinforced most in class.</CardDescription>
+            <CardTitle>Técnicas más practicadas</CardTitle>
           </CardHeader>
           <CardContent>
             {stats.drilled.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No techniques drilled yet.</p>
+              <p className="text-sm text-muted-foreground">Todavía no registraste técnicas.</p>
             ) : (
               <div className="flex flex-col gap-2">
                 {stats.drilled.map((d, i) => (
@@ -310,12 +330,11 @@ export default function ProgressPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Recent focus</CardTitle>
-            <CardDescription>What you told yourself to work on next.</CardDescription>
+            <CardTitle>Lo que te propusiste trabajar</CardTitle>
           </CardHeader>
           <CardContent>
             {stats.focus.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No focus notes yet.</p>
+              <p className="text-sm text-muted-foreground">Todavía no anotaste un foco.</p>
             ) : (
               <ul className="flex flex-col gap-2">
                 {stats.focus.map((f) => (

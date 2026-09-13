@@ -5,14 +5,10 @@ import {
   techniqueProgress,
   STAGE_LABELS,
 } from "@/lib/training";
+import { STYLE_LABELS, label } from "@/lib/labels";
+import { formatDate } from "@/lib/date";
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ErrorNotice } from "./shared";
 export function TechniqueJourney({ id }: { id: number }) {
   const sessions = useSessions();
@@ -28,20 +24,20 @@ export function TechniqueJourney({ id }: { id: number }) {
         <Badge variant="outline">
           {classes.length
             ? STAGE_LABELS[techniqueProgress(evidence)]
-            : "Guardada para explorar"}
+            : "Guardada"}
         </Badge>
         <CardTitle>Tu recorrido con esta técnica</CardTitle>
-        <CardDescription>
-          Recordar los pasos y aplicarlos en un roll son avances distintos.
-        </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <ErrorNotice error={sessions.error} />
         <p>
-          {classes.length} clases registradas
-          {stats.rate !== null
-            ? ` · ${stats.successes} éxitos en ${stats.attempts} intentos medidos`
-            : " · Sin cantidades suficientes para calcular éxito"}
+          {classes.length === 0
+            ? "Todavía no la practicaste en clase."
+            : classes.length === 1
+              ? "1 clase"
+              : `${classes.length} clases`}
+          {stats.rate !== null &&
+            ` · ${stats.successes} de ${stats.attempts} intentos salieron`}
         </p>
         {classes.slice(0, 10).map((s) => (
           <Link
@@ -49,7 +45,13 @@ export function TechniqueJourney({ id }: { id: number }) {
             key={s.id}
             to={`/session/${s.id}`}
           >
-            {s.date} · {s.style ?? "Modalidad pendiente"} · {s.classTopic}
+            {[
+              formatDate(s.date),
+              label(STYLE_LABELS, s.style, ""),
+              s.classTopic,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
           </Link>
         ))}
       </CardContent>

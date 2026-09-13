@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
 import type { Gameplan, PlanNode, TrainingState } from "@/lib/training";
 import type { Style, Technique } from "@/lib/types";
+import { POSITION_LABELS, STYLE_LABELS, label } from "@/lib/labels";
 import { useTraining, useTrainingActions } from "./queries";
 import { useTechniques, useSessions } from "@/lib/queries";
 import { PageHeader } from "@/components/app/page-header";
@@ -18,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Blank, ErrorNotice, Loading, StylePicker } from "./shared";
 export default function GameplanPage() {
   const [params, setParams] = useSearchParams();
@@ -34,15 +37,26 @@ export default function GameplanPage() {
     sessions.data
       ?.filter((s) => s.style === style)
       .flatMap((s) => s.evidence ?? []) ?? [];
+  const coachLink = `/coach?mode=gameplan&prompt=${encodeURIComponent(`Quiero ${plan?.nodes.length ? "revisar y desarrollar" : "construir"} mi gameplan de ${STYLE_LABELS[style]}. Ayudame a contar mi intención, evaluar si se adapta a mi perfil y encontrar variantes. Preguntame de a una cosa antes de proponer cambios.`)}`;
+  const records = selected?.techniqueId
+    ? evidence.filter((e) => e.techniqueId === selected.techniqueId).length
+    : 0;
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Mi sistema de pelea."
-        lead="Tu intención, las respuestas del rival y tus alternativas."
+        title={editing ? "Editar gameplan" : "Mi juego"}
         action={
-          <Button variant="outline" onClick={() => setEditing((v) => !v)}>
-            {editing ? "Cerrar edición" : "Editar mi plan"}
-          </Button>
+          !editing &&
+          !!plan?.nodes.length && (
+            <>
+              <Button variant="outline" onClick={() => setEditing(true)}>
+                Editar
+              </Button>
+              <Button nativeButton={false} render={<Link to={coachLink} />}>
+                Revisar con el coach
+              </Button>
+            </>
+          )
         }
       />
       <StylePicker
@@ -62,26 +76,37 @@ export default function GameplanPage() {
           state={state.data}
           style={style}
           techniques={techniques.data ?? []}
-          onSaved={() => setEditing(false)}
+          onDone={() => setEditing(false)}
         />
       ) : !plan?.nodes.length ? (
-        <Blank title={plan?.title || "Tu juego empieza con una idea."}>
-          Contale al coach desde dónde querés empezar, qué posiciones buscás y
-          qué querés conseguir. También podés editar el plan manualmente.
+        <Blank
+          title={plan?.title || `Todavía no armaste tu juego de ${STYLE_LABELS[style]}`}
+          action={
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button nativeButton={false} render={<Link to={coachLink} />}>
+                Armarlo con el coach
+              </Button>
+              <Button variant="outline" onClick={() => setEditing(true)}>
+                Crear a mano
+              </Button>
+            </div>
+          }
+        >
+          Contá desde dónde empezás, qué posiciones buscás y qué querés
+          conseguir.
         </Blank>
       ) : (
         <>
           <div>
             <h2 className="text-h2">{plan.title}</h2>
-            <p className="mt-2 text-lead">{plan.intention}</p>
+            {plan.intention && (
+              <p className="mt-2 text-lead">{plan.intention}</p>
+            )}
           </div>
           {plan.assessment && (
             <Card>
               <CardHeader>
                 <CardTitle>Evaluación del coach</CardTitle>
-                <CardDescription>
-                  Hipótesis para probar entrenando, confirmada por vos.
-                </CardDescription>
               </CardHeader>
               <CardContent>
                 <p className="whitespace-pre-wrap">{plan.assessment}</p>
@@ -101,7 +126,7 @@ export default function GameplanPage() {
                     aria-pressed={selected?.id === n.id}
                   >
                     <span className="text-xs opacity-70">
-                      {String(i + 1).padStart(2, "0")} · {n.position} ·{" "}
+                      {i + 1} · {label(POSITION_LABELS, n.position)} ·{" "}
                       {n.status === "suggested" ? "Por explorar" : "Aprendida"}
                     </span>
                     <p className="mt-1 font-medium">{n.action}</p>
@@ -114,63 +139,67 @@ export default function GameplanPage() {
                 <CardHeader>
                   <Badge variant="outline">
                     {selected.status === "suggested"
-                      ? "Sugerencia por probar"
-                      : "Parte de tu juego"}
+                      ? "Por explorar"
+                      : "Aprendida"}
                   </Badge>
-                  <CardTitle>{selected.position}</CardTitle>
+                  <CardTitle>{label(POSITION_LABELS, selected.position)}</CardTitle>
                   <CardDescription>{selected.action}</CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-4">
-                  <div>
-                    <h3 className="text-label">Si el rival responde…</h3>
-                    <p className="mt-1">
-                      {selected.opponentResponse ||
-                        "Todavía no registraste una respuesta del rival."}
-                    </p>
-                  </div>
-                  <div>
-                    <h3 className="text-label">A tener en cuenta</h3>
-                    <p className="mt-1">
-                      {selected.caution ||
-                        "Anotá el detalle o la dificultad que querés probar."}
-                    </p>
-                  </div>
+                  {selected.opponentResponse && (
+                    <div>
+                      <h3 className="text-label">Si el rival responde…</h3>
+                      <p className="mt-1">{selected.opponentResponse}</p>
+                    </div>
+                  )}
+                  {selected.caution && (
+                    <div>
+                      <h3 className="text-label">A tener en cuenta</h3>
+                      <p className="mt-1">{selected.caution}</p>
+                    </div>
+                  )}
                   {selected.techniqueId && (
                     <Link
                       className="underline"
                       to={`/techniques/${selected.techniqueId}`}
                     >
-                      Ver técnica ·{" "}
-                      {
-                        evidence.filter(
-                          (e) => e.techniqueId === selected.techniqueId,
-                        ).length
-                      }{" "}
-                      registros en clases
+                      Ver técnica · {records}{" "}
+                      {records === 1 ? "registro" : "registros"} en clases
                     </Link>
                   )}
-                  <h3 className="text-label">Cómo sigue</h3>
                   {selected.next.length ? (
-                    selected.next.map((id) => {
-                      const next = plan.nodes.find((n) => n.id === id);
-                      return (
-                        next && (
-                          <Button
-                            key={id}
-                            className="h-auto justify-start whitespace-normal py-3 text-left"
-                            variant="outline"
-                            onClick={() => setSelectedId(id)}
-                          >
-                            → {next.position}: {next.action}
-                          </Button>
-                        )
-                      );
-                    })
+                    <>
+                      <h3 className="text-label">Cómo sigue</h3>
+                      {selected.next.map((id) => {
+                        const next = plan.nodes.find((n) => n.id === id);
+                        return (
+                          next && (
+                            <Button
+                              key={id}
+                              className="h-auto justify-start whitespace-normal py-3 text-left"
+                              variant="outline"
+                              onClick={() => setSelectedId(id)}
+                            >
+                              → {label(POSITION_LABELS, next.position)}: {next.action}
+                            </Button>
+                          )
+                        );
+                      })}
+                    </>
                   ) : (
-                    <p className="text-sm text-muted-foreground">
-                      Acá termina esta secuencia. Podés pedirle al coach una
-                      variante.
-                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm text-muted-foreground">
+                        Acá termina esta secuencia.
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        nativeButton={false}
+                        render={<Link to={`/explore?style=${style}`} />}
+                      >
+                        Buscar variantes
+                      </Button>
+                    </div>
                   )}
                 </CardContent>
               </Card>
@@ -178,25 +207,6 @@ export default function GameplanPage() {
           </div>
         </>
       )}
-      <div className="flex flex-wrap gap-2">
-        <Button
-          nativeButton={false}
-          render={
-            <Link
-              to={`/coach?mode=gameplan&prompt=${encodeURIComponent(`Quiero ${plan ? "revisar y desarrollar" : "construir"} mi gameplan de ${style}. Ayudame a contar mi intención, evaluar si se adapta a mi perfil y encontrar variantes. Preguntame de a una cosa antes de proponer cambios.`)}`}
-            />
-          }
-        >
-          {plan ? "Revisar con el coach" : "Contarle mi gameplan al coach"}
-        </Button>
-        <Button
-          variant="outline"
-          nativeButton={false}
-          render={<Link to={`/explore?style=${style}`} />}
-        >
-          Buscar variantes
-        </Button>
-      </div>
     </div>
   );
 }
@@ -204,12 +214,12 @@ function PlanEditor({
   state,
   style,
   techniques,
-  onSaved,
+  onDone,
 }: {
   state: TrainingState;
   style: Style;
   techniques: Technique[];
-  onSaved: () => void;
+  onDone: () => void;
 }) {
   const [plan, setPlan] = useState<Gameplan>(
     state.gameplans.find((p) => p.style === style) ?? {
@@ -230,7 +240,7 @@ function PlanEditor({
     <div className="flex flex-col gap-5">
       <FieldGroup>
         <Field>
-          <FieldLabel htmlFor="plan-title">Nombre del plan</FieldLabel>
+          <FieldLabel htmlFor="plan-title">Nombre</FieldLabel>
           <Input
             id="plan-title"
             value={plan.title}
@@ -246,118 +256,119 @@ function PlanEditor({
           />
         </Field>
       </FieldGroup>
-      {plan.nodes.map((n, i) => (
-        <Card key={n.id}>
-          <CardHeader>
-            <CardTitle>Paso {i + 1}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <FieldGroup>
-              {(
-                [
-                  ["position", "Posición"],
-                  ["action", "Qué buscás hacer"],
-                  ["opponentResponse", "Cómo puede responder el rival"],
-                  ["caution", "En qué tener cuidado"],
-                ] as const
-              ).map(([k, label]) => (
-                <Field key={k}>
-                  <FieldLabel htmlFor={`${n.id}-${k}`}>{label}</FieldLabel>
-                  <Input
-                    id={`${n.id}-${k}`}
-                    value={n[k]}
-                    onChange={(e) => patch(n.id, { [k]: e.target.value })}
-                  />
+      {plan.nodes.map((n, i) => {
+        const others = plan.nodes
+          .map((x, j) => ({ x, j }))
+          .filter(({ x }) => x.id !== n.id);
+        return (
+          <Card key={n.id}>
+            <CardHeader>
+              <CardTitle>Paso {i + 1}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FieldGroup>
+                {(
+                  [
+                    ["position", "Posición"],
+                    ["action", "Qué buscás"],
+                    ["opponentResponse", "Respuesta del rival"],
+                    ["caution", "Cuidado con"],
+                  ] as const
+                ).map(([k, label]) => (
+                  <Field key={k}>
+                    <FieldLabel htmlFor={`${n.id}-${k}`}>{label}</FieldLabel>
+                    <Input
+                      id={`${n.id}-${k}`}
+                      value={n[k]}
+                      onChange={(e) => patch(n.id, { [k]: e.target.value })}
+                    />
+                  </Field>
+                ))}
+                <Field>
+                  <FieldLabel>Estado</FieldLabel>
+                  <ToggleGroup
+                    aria-label="Estado"
+                    value={[n.status]}
+                    onValueChange={(v) =>
+                      v[0] && patch(n.id, { status: v[0] as PlanNode["status"] })
+                    }
+                  >
+                    <ToggleGroupItem value="learned">Aprendida</ToggleGroupItem>
+                    <ToggleGroupItem value="suggested">
+                      Por explorar
+                    </ToggleGroupItem>
+                  </ToggleGroup>
                 </Field>
-              ))}
-              <Field>
-                <FieldLabel htmlFor={`${n.id}-status`}>Estado</FieldLabel>
-                <select
-                  className="training-select"
-                  id={`${n.id}-status`}
-                  value={n.status}
-                  onChange={(e) =>
-                    patch(n.id, {
-                      status: e.target.value as PlanNode["status"],
-                    })
-                  }
-                >
-                  <option value="learned">Aprendida</option>
-                  <option value="suggested">Por explorar</option>
-                </select>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor={`${n.id}-technique`}>
-                  Técnica de tu biblioteca, opcional
-                </FieldLabel>
-                <select
-                  className="training-select"
-                  id={`${n.id}-technique`}
-                  value={n.techniqueId ?? ""}
-                  onChange={(e) =>
-                    patch(n.id, {
-                      techniqueId: e.target.value
-                        ? Number(e.target.value)
-                        : null,
-                    })
-                  }
-                >
-                  <option value="">Sin vincular</option>
-                  {techniques.map((t) => (
-                    <option value={t.id} key={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor={`${n.id}-next`}>
-                  Pasos siguientes, podés elegir varias alternativas
-                </FieldLabel>
-                <select
-                  className="training-select min-h-24"
-                  multiple
-                  id={`${n.id}-next`}
-                  value={n.next}
-                  onChange={(e) =>
-                    patch(n.id, {
-                      next: Array.from(e.target.selectedOptions).map(
-                        (o) => o.value,
-                      ),
-                    })
-                  }
-                >
-                  {plan.nodes
-                    .filter((x) => x.id !== n.id)
-                    .map((x) => (
-                      <option value={x.id} key={x.id}>
-                        {x.position}: {x.action}
+                <Field>
+                  <FieldLabel htmlFor={`${n.id}-technique`}>Técnica</FieldLabel>
+                  <select
+                    className="training-select"
+                    id={`${n.id}-technique`}
+                    value={n.techniqueId ?? ""}
+                    onChange={(e) =>
+                      patch(n.id, {
+                        techniqueId: e.target.value
+                          ? Number(e.target.value)
+                          : null,
+                      })
+                    }
+                  >
+                    <option value="">Sin vincular</option>
+                    {techniques.map((t) => (
+                      <option value={t.id} key={t.id}>
+                        {t.name}
                       </option>
                     ))}
-                </select>
-              </Field>
-            </FieldGroup>
-          </CardContent>
-          <CardFooter>
-            <Button
-              variant="ghost"
-              onClick={() =>
-                setPlan((p) => ({
-                  ...p,
-                  nodes: p.nodes
-                    .filter((x) => x.id !== n.id)
-                    .map((x) => ({
-                      ...x,
-                      next: x.next.filter((id) => id !== n.id),
-                    })),
-                }))
-              }
-            >
-              Quitar paso
-            </Button>
-          </CardFooter>
-        </Card>
-      ))}
+                  </select>
+                </Field>
+                {others.length > 0 && (
+                  <Field>
+                    <FieldLabel>Sigue con</FieldLabel>
+                    <ToggleGroup
+                      multiple
+                      variant="outline"
+                      aria-label="Sigue con"
+                      value={n.next}
+                      onValueChange={(v) => patch(n.id, { next: v })}
+                      className="flex-wrap justify-start"
+                    >
+                      {others.map(({ x, j }) => (
+                        <ToggleGroupItem
+                          key={x.id}
+                          value={x.id}
+                          className="max-w-full"
+                        >
+                          <span className="truncate">
+                            {j + 1}. {x.action || label(POSITION_LABELS, x.position, "Sin nombre")}
+                          </span>
+                        </ToggleGroupItem>
+                      ))}
+                    </ToggleGroup>
+                  </Field>
+                )}
+              </FieldGroup>
+            </CardContent>
+            <CardFooter>
+              <Button
+                variant="ghost"
+                onClick={() =>
+                  setPlan((p) => ({
+                    ...p,
+                    nodes: p.nodes
+                      .filter((x) => x.id !== n.id)
+                      .map((x) => ({
+                        ...x,
+                        next: x.next.filter((id) => id !== n.id),
+                      })),
+                  }))
+                }
+              >
+                Quitar paso
+              </Button>
+            </CardFooter>
+          </Card>
+        );
+      })}
       <Button
         variant="outline"
         onClick={() =>
@@ -382,20 +393,30 @@ function PlanEditor({
         Agregar paso
       </Button>
       <ErrorNotice error={update.error} />
-      <Button
-        disabled={update.isPending}
-        onClick={() =>
-          update.mutate(
-            {
-              payload: { kind: "gameplan", data: plan },
-              revision: state.revision,
-            },
-            { onSuccess: onSaved },
-          )
-        }
-      >
-        Guardar gameplan
-      </Button>
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button variant="outline" onClick={onDone}>
+          Cancelar
+        </Button>
+        <Button
+          disabled={update.isPending}
+          onClick={() =>
+            update.mutate(
+              {
+                payload: { kind: "gameplan", data: plan },
+                revision: state.revision,
+              },
+              {
+                onSuccess: () => {
+                  toast("Gameplan guardado");
+                  onDone();
+                },
+              },
+            )
+          }
+        >
+          {update.isPending ? "Guardando…" : "Guardar"}
+        </Button>
+      </div>
     </div>
   );
 }

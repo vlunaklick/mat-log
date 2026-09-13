@@ -18,7 +18,8 @@ export default function LoginPage() {
     const { error: signInError } = await authClient.signIn.email({ email, password });
     setSubmitting(false);
     if (signInError) {
-      setError(signInError.message ?? "Could not sign in.");
+      // better-auth messages come in English; keep one clear Spanish message.
+      setError("Email o contraseña incorrectos.");
     }
   }
 
@@ -27,8 +28,7 @@ export default function LoginPage() {
       <div className="flex w-full max-w-sm flex-col gap-6">
         <div className="flex flex-col gap-2 text-center">
           <span className="squircle mx-auto flex size-10 items-center justify-center bg-primary text-primary-foreground text-label">ML</span>
-          <h1 className="text-h2">Sign in.</h1>
-          <p className="text-lead text-muted-foreground">Log in to your Mat Log journal.</p>
+          <h1 className="text-h2">Mat Log</h1>
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-6">
@@ -45,7 +45,7 @@ export default function LoginPage() {
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="password">Password</FieldLabel>
+              <FieldLabel htmlFor="password">Contraseña</FieldLabel>
               <Input
                 id="password"
                 type="password"
@@ -64,7 +64,7 @@ export default function LoginPage() {
           )}
 
           <Button type="submit" disabled={submitting}>
-            {submitting ? "Signing in…" : "Sign in"}
+            {submitting ? "Ingresando…" : "Ingresar"}
           </Button>
         </form>
       </div>

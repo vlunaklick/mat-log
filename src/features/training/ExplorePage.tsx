@@ -2,7 +2,9 @@ import { useDeferredValue, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useCatalog, useTrainingActions } from "./queries";
 import { useTechniques } from "@/lib/queries";
+import { toast } from "sonner";
 import { POSITIONS } from "@/lib/types";
+import { POSITION_LABELS, STYLE_LABELS, label } from "@/lib/labels";
 import { PageHeader } from "@/components/app/page-header";
 import {
   Card,
@@ -27,6 +29,7 @@ export default function ExplorePage() {
   const catalog = useCatalog(q, style, position, offset),
     techniques = useTechniques(),
     actions = useTrainingActions();
+  const total = catalog.data?.total ?? 0;
   const filter = (key: string, value: string) => {
     const next = new URLSearchParams(params);
     next.set(key, value);
@@ -36,23 +39,17 @@ export default function ExplorePage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Explorar."
-        lead="Un catálogo amplio. Tu biblioteca crece a tu ritmo."
-        action={
-          <Button
-            variant="outline"
-            nativeButton={false}
-            render={<Link to="/techniques" />}
-          >
-            Mi biblioteca
-          </Button>
+        title="Explorar"
+        lead={
+          catalog.data
+            ? `${total} ${total === 1 ? "referencia" : "referencias"}`
+            : undefined
         }
+        back={{ to: "/techniques", label: "Técnicas" }}
       />
       <FieldGroup>
         <Field>
-          <FieldLabel htmlFor="catalog-search">
-            Técnica, posición o nombre que recordás
-          </FieldLabel>
+          <FieldLabel htmlFor="catalog-search">Buscar</FieldLabel>
           <Input
             id="catalog-search"
             placeholder="Media guardia, kimura, arm drag…"
@@ -87,7 +84,9 @@ export default function ExplorePage() {
             >
               <option value="all">Todas</option>
               {POSITIONS.map((p) => (
-                <option key={p}>{p}</option>
+                <option key={p} value={p}>
+                  {POSITION_LABELS[p]}
+                </option>
               ))}
             </select>
           </Field>
@@ -98,12 +97,29 @@ export default function ExplorePage() {
       />
       {catalog.isPending ? (
         <Loading />
+      ) : catalog.isError ? null : total === 0 ? (
+        <Blank
+          title="No encontramos esa referencia"
+          action={
+            query.trim() && (
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={
+                  <Link
+                    to={`/coach?prompt=${encodeURIComponent(`Busco una técnica que no encuentro en el catálogo: ${query}`)}`}
+                  />
+                }
+              >
+                Consultar al coach
+              </Button>
+            )
+          }
+        >
+          Probá con otro nombre o describísela al coach.
+        </Blank>
       ) : (
         <>
-          <p className="text-sm text-muted-foreground">
-            {catalog.data?.total ?? 0} referencias · posiciones, transiciones y
-            técnicas. La cobertura de gi es menor.
-          </p>
           <div className="grid items-start gap-4 md:grid-cols-2">
             {catalog.data?.entries.map((e) => {
               const owned = techniques.data?.find(
@@ -114,7 +130,9 @@ export default function ExplorePage() {
                   <CardHeader>
                     <div className="flex flex-wrap gap-2">
                       <Badge variant="outline">
-                        {e.style === "both" ? "Gi y no-gi" : e.style}
+                        {e.style === "both"
+                          ? "Gi y no-gi"
+                          : label(STYLE_LABELS, e.style)}
                       </Badge>
                       <Badge variant="secondary">
                         {e.kind === "position"
@@ -126,7 +144,7 @@ export default function ExplorePage() {
                     </div>
                     <CardTitle>{e.name}</CardTitle>
                     <CardDescription>
-                      {e.position} · {e.source}
+                      {label(POSITION_LABELS, e.position)} · {e.source}
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="flex flex-col gap-3">
@@ -169,15 +187,19 @@ export default function ExplorePage() {
                         nativeButton={false}
                         render={<Link to={`/techniques/${owned.id}`} />}
                       >
-                        En mi biblioteca
+                        Ver en mi biblioteca
                       </Button>
                     ) : (
                       <Button
                         variant="outline"
                         disabled={actions.unlock.isPending}
-                        onClick={() => actions.unlock.mutate(e.id)}
+                        onClick={() =>
+                          actions.unlock.mutate(e.id, {
+                            onSuccess: () => toast("Guardada en tu biblioteca"),
+                          })
+                        }
                       >
-                        Guardar para explorar
+                        Guardar
                       </Button>
                     )}
                     <Button
@@ -185,7 +207,7 @@ export default function ExplorePage() {
                       nativeButton={false}
                       render={
                         <Link
-                          to={`/coach?prompt=${encodeURIComponent(`Quiero explorar ${e.name} (${e.position}), referencia ${e.id}. Buscala en el catálogo y ayudame a entender cómo encaja en mi juego, sin asumir que ya la aprendí.`)}`}
+                          to={`/coach?prompt=${encodeURIComponent(`Quiero explorar ${e.name} (${label(POSITION_LABELS, e.position)}), referencia ${e.id}. Buscala en el catálogo y ayudame a entender cómo encaja en mi juego, sin asumir que ya la aprendí.`)}`}
                         />
                       }
                     >
@@ -196,60 +218,61 @@ export default function ExplorePage() {
               );
             })}
           </div>
-          {catalog.data?.total === 0 && (
-            <Blank title="No encontramos esa referencia.">
-              Probá otro nombre o describísela al coach. La biblioteca no cubre
-              todas las variantes.
-            </Blank>
+          {total > 24 && (
+            <div className="flex items-center justify-between gap-3">
+              <Button
+                variant="outline"
+                disabled={!offset}
+                onClick={() =>
+                  setParams({
+                    ...Object.fromEntries(params),
+                    offset: String(Math.max(0, offset - 24)),
+                  })
+                }
+              >
+                Anterior
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Página {Math.floor(offset / 24) + 1} de {Math.ceil(total / 24)}
+              </span>
+              <Button
+                variant="outline"
+                disabled={offset + 24 >= total}
+                onClick={() =>
+                  setParams({
+                    ...Object.fromEntries(params),
+                    offset: String(offset + 24),
+                  })
+                }
+              >
+                Siguiente
+              </Button>
+            </div>
           )}
-          <div className="flex items-center justify-between gap-3">
-            <Button
-              variant="outline"
-              disabled={!offset}
-              onClick={() =>
-                setParams({
-                  ...Object.fromEntries(params),
-                  offset: String(Math.max(0, offset - 24)),
-                })
-              }
-            >
-              Anterior
-            </Button>
-            <span className="text-sm">
-              Página {Math.floor(offset / 24) + 1}
-            </span>
-            <Button
-              variant="outline"
-              disabled={offset + 24 >= (catalog.data?.total ?? 0)}
-              onClick={() =>
-                setParams({
-                  ...Object.fromEntries(params),
-                  offset: String(offset + 24),
-                })
-              }
-            >
-              Siguiente
-            </Button>
-          </div>
         </>
       )}
-      <section className="flex flex-col gap-3">
-        <h2 className="text-h2">Fuentes y lecturas.</h2>
-        {catalog.data?.sources.map((s) => (
-          <a
-            href={s.url}
-            target="_blank"
-            rel="noreferrer"
-            key={s.name}
-            className="rounded-3xl bg-surface p-5"
-          >
-            <p className="text-title">{s.name} ↗</p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {s.description}
-            </p>
-          </a>
-        ))}
-      </section>
+      {catalog.data?.sources.length ? (
+        <details className="rounded-3xl bg-surface p-5">
+          <summary className="cursor-pointer text-sm font-medium">
+            Fuentes del catálogo
+          </summary>
+          <ul className="mt-3 flex flex-col gap-3">
+            {catalog.data.sources.map((s) => (
+              <li key={s.name} className="text-sm">
+                <a
+                  href={s.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline"
+                >
+                  {s.name} ↗
+                </a>
+                <p className="text-muted-foreground">{s.description}</p>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
     </div>
   );
 }

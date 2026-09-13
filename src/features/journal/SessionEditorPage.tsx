@@ -1,10 +1,12 @@
 import { EvidenceEditor } from "../training/EvidenceEditor";
+import { Blank } from "../training/shared";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { X } from "lucide-react";
 import { toast } from "sonner";
 import { useSessionMutations, useSessions, useTechniques } from "@/lib/queries";
 import { todayISO } from "../../lib/date";
+import { BELT_LABELS, OUTCOME_LABELS, POSITION_LABELS } from "../../lib/labels";
 import { POSITIONS, type Position, type Roll, type RollOutcome, type Session, type Style } from "../../lib/types";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
@@ -29,6 +31,8 @@ import {
 } from "@/components/ui/alert-dialog";
 
 const BELTS = ["white", "blue", "purple", "brown", "black"] as const;
+const BELT_ITEMS = { "": "Sin especificar", ...BELT_LABELS };
+const STUCK_ITEMS = { "": "Ninguna", ...POSITION_LABELS };
 const OUTCOMES: RollOutcome[] = ["dominated", "won", "even", "lost", "survived", "unknown"];
 
 function emptySession(): Session {
@@ -99,12 +103,12 @@ function SessionForm({ initial }: { initial: Session }) {
     try {
       if (isEditing && initial.id !== undefined) {
         await update.mutateAsync({ id: initial.id, ...payload });
-        toast("Session updated.");
+        toast("Clase actualizada");
       } else {
         await create.mutateAsync(payload);
-        toast("Session logged.");
+        toast("Clase registrada");
       }
-      navigate("/");
+      navigate("/journal");
     } catch {
       // error surfaced via saveError below
     }
@@ -113,68 +117,63 @@ function SessionForm({ initial }: { initial: Session }) {
   async function handleDelete() {
     if (!isEditing || initial.id === undefined) return;
     await remove.mutateAsync(initial.id);
-    toast("Session deleted.");
-    navigate("/");
+    toast("Clase eliminada");
+    navigate("/journal");
   }
 
   return (
     <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6">
-      <PageHeader title={isEditing ? "Edit session." : "Log today's class."} lead="One line per class. Be honest." />
-      <EvidenceEditor value={evidence.filter(e => techniqueIds.includes(e.techniqueId))} onChange={setEvidence} techniques={techniques ?? []} />
-      <Field><FieldLabel htmlFor="goal-notes">Qué pasó con tu objetivo</FieldLabel><Textarea id="goal-notes" value={goalNotes} onChange={e => setGoalNotes(e.target.value)} /></Field>
-
-      {saveError && (
-        <Alert variant="destructive">
-          <AlertDescription>{saveError instanceof Error ? saveError.message : "Could not save session."}</AlertDescription>
-        </Alert>
-      )}
+      <PageHeader title={isEditing ? "Editar clase" : "Registrar clase"} back={{ to: "/journal", label: "Diario" }} />
 
       <Card>
         <CardContent>
           <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="date">Date</FieldLabel>
-              <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            </Field>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field>
+                <FieldLabel htmlFor="date">Fecha</FieldLabel>
+                <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="duration">Duración (min)</FieldLabel>
+                <Input
+                  id="duration"
+                  type="number"
+                  min={0}
+                  value={durationMin ?? ""}
+                  onChange={(e) => setDurationMin(e.target.value === "" ? null : Number(e.target.value))}
+                />
+              </Field>
+            </div>
+
+            <div className="flex flex-col gap-5 sm:flex-row">
+              <Field>
+                <FieldLabel>Modalidad</FieldLabel>
+                <ToggleGroup value={style ? [style] : []} onValueChange={(v) => v[0] && setStyle(v[0] as Style)}>
+                  <ToggleGroupItem value="gi">Gi</ToggleGroupItem>
+                  <ToggleGroupItem value="nogi">No-gi</ToggleGroupItem>
+                </ToggleGroup>
+              </Field>
+
+              <Field>
+                <FieldLabel>Energía</FieldLabel>
+                <ToggleGroup value={energy === null ? [] : [String(energy)]} onValueChange={(v) => v[0] && setEnergy(Number(v[0]) as 1 | 2 | 3 | 4 | 5)}>
+                  {([1, 2, 3, 4, 5] as const).map((n) => (
+                    <ToggleGroupItem key={n} value={String(n)}>
+                      {n}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+              </Field>
+            </div>
 
             <Field>
-              <FieldLabel>Style</FieldLabel>
-              <ToggleGroup value={style ? [style] : []} onValueChange={(v) => v[0] && setStyle(v[0] as Style)}>
-                <ToggleGroupItem value="gi">GI</ToggleGroupItem>
-                <ToggleGroupItem value="nogi">NO-GI</ToggleGroupItem>
-              </ToggleGroup>
-            </Field>
-
-            <Field>
-              <FieldLabel htmlFor="duration">Duration (min)</FieldLabel>
-              <Input
-                id="duration"
-                type="number"
-                min={0}
-                value={durationMin ?? ""}
-                onChange={(e) => setDurationMin(e.target.value === "" ? null : Number(e.target.value))}
-              />
-            </Field>
-
-            <Field>
-              <FieldLabel>Energy</FieldLabel>
-              <ToggleGroup value={energy === null ? [] : [String(energy)]} onValueChange={(v) => v[0] && setEnergy(Number(v[0]) as 1 | 2 | 3 | 4 | 5)}>
-                {([1, 2, 3, 4, 5] as const).map((n) => (
-                  <ToggleGroupItem key={n} value={String(n)}>
-                    {n}
-                  </ToggleGroupItem>
-                ))}
-              </ToggleGroup>
-            </Field>
-
-            <Field>
-              <FieldLabel htmlFor="classTopic">Class topic</FieldLabel>
-              <Input id="classTopic" value={classTopic} onChange={(e) => setClassTopic(e.target.value)} placeholder="What did class cover?" />
+              <FieldLabel htmlFor="classTopic">Tema de la clase</FieldLabel>
+              <Input id="classTopic" value={classTopic} onChange={(e) => setClassTopic(e.target.value)} placeholder="Ej: pasajes desde media guardia" />
             </Field>
 
             {techniques && techniques.length > 0 && (
               <Field>
-                <FieldLabel>Techniques drilled</FieldLabel>
+                <FieldLabel>Técnicas practicadas</FieldLabel>
                 <ToggleGroup multiple variant="outline" value={techniqueIds.map(String)} onValueChange={(v) => setTechniqueIds(v.map(Number))} className="flex-wrap justify-start">
                   {techniques.map((t) => (
                     <ToggleGroupItem key={t.id} value={String(t.id)} disabled={t.id === undefined}>
@@ -188,16 +187,18 @@ function SessionForm({ initial }: { initial: Session }) {
         </CardContent>
       </Card>
 
+      <EvidenceEditor value={evidence.filter(e => techniqueIds.includes(e.techniqueId))} onChange={setEvidence} techniques={techniques ?? []} />
+
       <Card>
         <CardContent className="flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <FieldLabel>Rolls</FieldLabel>
             <Button variant="secondary" size="sm" type="button" onClick={() => setRolls((prev) => [...prev, emptyRoll()])}>
-              Add roll
+              Agregar roll
             </Button>
           </div>
 
-          {rolls.length === 0 && <FieldDescription>No rolls logged yet.</FieldDescription>}
+          {rolls.length === 0 && <FieldDescription>Sin rolls.</FieldDescription>}
 
           {rolls.map((roll, i) => (
             <Card key={i} size="sm" className="bg-surface ring-0">
@@ -206,63 +207,82 @@ function SessionForm({ initial }: { initial: Session }) {
                   <span className="text-sm font-medium text-foreground">Roll {i + 1}</span>
                   <Button variant="ghost" size="sm" type="button" onClick={() => removeRoll(i)}>
                     <X data-icon="inline-start" />
-                    Remove
+                    Quitar
                   </Button>
                 </div>
-                <Input
-                  placeholder="Partner name"
-                  value={roll.partnerName ?? ""}
-                  onChange={(e) => updateRoll(i, { partnerName: e.target.value })}
-                />
-                <Select
-                  value={roll.partnerBelt ?? ""}
-                  onValueChange={(v) => updateRoll(i, { partnerBelt: ((v as string) || undefined) as Roll["partnerBelt"] })}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Partner belt...</SelectItem>
-                    {BELTS.map((b) => (
-                      <SelectItem key={b} value={b}>
-                        {b}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select value={roll.outcome} onValueChange={(v) => updateRoll(i, { outcome: v as RollOutcome })}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {OUTCOMES.map((o) => (
-                      <SelectItem key={o} value={o}>
-                        {o}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={roll.stuckIn ?? ""}
-                  onValueChange={(v) => updateRoll(i, { stuckIn: ((v as string) || undefined) as Position | undefined })}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Stuck in...</SelectItem>
-                    {POSITIONS.map((p) => (
-                      <SelectItem key={p} value={p}>
-                        {p}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Textarea
-                  placeholder="Notes"
-                  value={roll.notes ?? ""}
-                  onChange={(e) => updateRoll(i, { notes: e.target.value })}
-                />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field>
+                    <FieldLabel htmlFor={`roll-partner-${i}`}>Compañero</FieldLabel>
+                    <Input
+                      id={`roll-partner-${i}`}
+                      value={roll.partnerName ?? ""}
+                      onChange={(e) => updateRoll(i, { partnerName: e.target.value })}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor={`roll-belt-${i}`}>Cinturón</FieldLabel>
+                    <Select
+                      items={BELT_ITEMS}
+                      value={roll.partnerBelt ?? ""}
+                      onValueChange={(v) => updateRoll(i, { partnerBelt: ((v as string) || undefined) as Roll["partnerBelt"] })}
+                    >
+                      <SelectTrigger id={`roll-belt-${i}`} className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">{BELT_ITEMS[""]}</SelectItem>
+                        {BELTS.map((b) => (
+                          <SelectItem key={b} value={b}>
+                            {BELT_LABELS[b]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor={`roll-outcome-${i}`}>Resultado</FieldLabel>
+                    <Select items={OUTCOME_LABELS} value={roll.outcome} onValueChange={(v) => updateRoll(i, { outcome: v as RollOutcome })}>
+                      <SelectTrigger id={`roll-outcome-${i}`} className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {OUTCOMES.map((o) => (
+                          <SelectItem key={o} value={o}>
+                            {OUTCOME_LABELS[o]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor={`roll-stuck-${i}`}>Dónde te costó</FieldLabel>
+                    <Select
+                      items={STUCK_ITEMS}
+                      value={roll.stuckIn ?? ""}
+                      onValueChange={(v) => updateRoll(i, { stuckIn: ((v as string) || undefined) as Position | undefined })}
+                    >
+                      <SelectTrigger id={`roll-stuck-${i}`} className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">{STUCK_ITEMS[""]}</SelectItem>
+                        {POSITIONS.map((p) => (
+                          <SelectItem key={p} value={p}>
+                            {POSITION_LABELS[p]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </div>
+                <Field>
+                  <FieldLabel htmlFor={`roll-notes-${i}`}>Notas</FieldLabel>
+                  <Textarea
+                    id={`roll-notes-${i}`}
+                    value={roll.notes ?? ""}
+                    onChange={(e) => updateRoll(i, { notes: e.target.value })}
+                  />
+                </Field>
               </CardContent>
             </Card>
           ))}
@@ -274,47 +294,58 @@ function SessionForm({ initial }: { initial: Session }) {
           <FieldGroup>
             <div className="flex flex-col gap-5 md:flex-row">
               <Field className="md:flex-1">
-                <FieldLabel htmlFor="whatWorked">What worked</FieldLabel>
+                <FieldLabel htmlFor="whatWorked">Qué funcionó</FieldLabel>
                 <Textarea id="whatWorked" value={whatWorked} onChange={(e) => setWhatWorked(e.target.value)} />
               </Field>
               <Field className="md:flex-1">
-                <FieldLabel htmlFor="whatFailed">What failed</FieldLabel>
+                <FieldLabel htmlFor="whatFailed">Qué te costó</FieldLabel>
                 <Textarea id="whatFailed" value={whatFailed} onChange={(e) => setWhatFailed(e.target.value)} />
               </Field>
             </div>
             <Field>
-              <FieldLabel htmlFor="nextFocus">Next focus</FieldLabel>
+              <FieldLabel htmlFor="nextFocus">Foco para la próxima clase</FieldLabel>
               <Textarea id="nextFocus" value={nextFocus} onChange={(e) => setNextFocus(e.target.value)} />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="goal-notes">Qué pasó con tu objetivo</FieldLabel>
+              <Textarea id="goal-notes" value={goalNotes} onChange={(e) => setGoalNotes(e.target.value)} />
             </Field>
           </FieldGroup>
         </CardContent>
       </Card>
 
-      <div className="flex flex-col gap-2">
+      {saveError && (
+        <Alert variant="destructive">
+          <AlertDescription>{saveError instanceof Error ? saveError.message : "No se pudo guardar la clase."}</AlertDescription>
+        </Alert>
+      )}
+
+      <div className="flex flex-wrap gap-2">
         <Button onClick={handleSave} disabled={saving}>
-          {saving ? "Saving…" : "Save"}
+          {saving ? "Guardando…" : isEditing ? "Guardar cambios" : "Guardar clase"}
         </Button>
-        {isEditing && (
-          <AlertDialog>
-            <AlertDialogTrigger render={<Button variant="destructive" type="button" />}>Delete</AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete this session?</AlertDialogTitle>
-                <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction render={<Button variant="destructive" />} onClick={handleDelete}>
-                  Delete
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        )}
-        <Button variant="ghost" onClick={() => navigate("/")}>
-          Cancel
+        <Button variant="ghost" onClick={() => navigate("/journal")}>
+          Cancelar
         </Button>
       </div>
+
+      {isEditing && (
+        <AlertDialog>
+          <AlertDialogTrigger render={<Button variant="destructive" type="button" className="mt-6 self-start" />}>Eliminar clase</AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Eliminar esta clase?</AlertDialogTitle>
+              <AlertDialogDescription>No se puede deshacer.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction render={<Button variant="destructive" />} onClick={handleDelete}>
+                Eliminar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </div>
   );
 }
@@ -339,8 +370,8 @@ export default function SessionEditorPage() {
   if (id !== undefined && !found) {
     return (
       <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6">
-        <PageHeader title="Session." />
-        <p className="text-muted-foreground">Session not found.</p>
+        <PageHeader title="Clase" back={{ to: "/journal", label: "Diario" }} />
+        <Blank title="No encontramos esta clase" />
       </div>
     );
   }
