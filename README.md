@@ -46,8 +46,10 @@ ssh crecenly-apps 'set -eu
 '
 ```
 
-The September 13, 2026 Application migration copies the stopped Service database into the Application volume. Backups and the former deployment command are retained in `/opt/bjj/backups/pre-application-20260913/`, accessible only to root. The previous Service `peohorsmczbc4vvmhczqtxz7` is retained stopped for rollback, with its original volume `peohorsmczbc4vvmhczqtxz7_bjj-pg-data` and files in `/data/coolify/services/peohorsmczbc4vvmhczqtxz7/`.
+The September 13, 2026 Application migration copied the stopped Service database into the Application volume. Backups and the former deployment command are retained in `/opt/bjj/backups/pre-application-20260913/`, accessible only to root. The previous Service `mat-log-rollback-20260913` (`peohorsmczbc4vvmhczqtxz7`) is retained stopped for rollback, with its original volume `peohorsmczbc4vvmhczqtxz7_bjj-pg-data` and files in `/data/coolify/services/peohorsmczbc4vvmhczqtxz7/`.
 
 To roll back, disable this Application's auto-deploy and stop it first. If any writes occurred after migration, back up the current database and transfer it into the old Service database before restarting the old API/web containers. Restore the Service domain to `https://bjj.vmoon.tech` if necessary, then use the old Service's **Deploy** action. Never start both stacks on port 8090 or run two PostgreSQL instances against one volume. Do not delete volumes during deployment or rollback.
 
 An even older pre-Coolify stack remains stopped under `/opt/bjj`, with volume `bjj_bjj_pg_data` and backups in `/opt/bjj/backups/pre-coolify/`. Its data predates both migrations.
+
+Migration checks passed: all three containers healthy, HTTPS and loopback health checks successful, all 12 public-table counts unchanged, and existing secret values preserved. First Application deployment: `8617576`, recorded as successful in Coolify.
