@@ -8,7 +8,7 @@ import { useSettings, useUpdateSettings } from "@/lib/queries";
 import type { Settings } from "@/lib/types";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -112,8 +112,7 @@ function SettingsForm({ initial }: { initial: Settings }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Meta semanal</CardTitle>
-          <CardDescription>Clases por semana.</CardDescription>
+          <CardTitle>Clases por semana</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <ToggleGroup

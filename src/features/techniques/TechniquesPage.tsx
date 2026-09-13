@@ -8,10 +8,8 @@ import { POSITIONS, type Position } from "@/lib/types";
 import { POSITION_LABELS } from "@/lib/labels";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Blank } from "@/features/training/shared";
@@ -30,13 +28,16 @@ export default function TechniquesPage() {
   const dueCount = techniques?.filter((t) => !t.archived && isDue(t)).length ?? 0;
   const hasFilters = position !== "all" || query.trim() !== "";
 
-  const filtered = (techniques ?? []).filter((t) => {
+  const beforePosition = (techniques ?? []).filter((t) => {
     if (t.archived) return false;
     if (libraryView === "learned" && !practicedIds.has(t.id!)) return false;
-    if (position !== "all" && t.position !== position) return false;
     if (query.trim() && !t.name.toLowerCase().includes(query.trim().toLowerCase())) return false;
     return true;
   });
+
+  const availablePositions = POSITIONS.filter((p) => beforePosition.some((t) => t.position === p));
+
+  const filtered = beforePosition.filter((t) => position === "all" || t.position === position);
 
   const groups = POSITIONS.map((p) => ({
     position: p,
@@ -49,7 +50,7 @@ export default function TechniquesPage() {
         title="Técnicas"
         action={
           <>
-            <Button variant="outline" nativeButton={false} render={<Link to="/explore" />}>
+            <Button variant="ghost" nativeButton={false} render={<Link to="/explore" />}>
               Explorar catálogo
             </Button>
             <Button nativeButton={false} render={<Link to="/techniques/new" />}>
@@ -66,51 +67,52 @@ export default function TechniquesPage() {
       )}
 
       {dueCount > 0 && (
-        <Card className="bg-surface ring-0">
-          <div className="flex flex-col gap-4 px-5 md:flex-row md:items-center md:justify-between">
-            <p className="text-lead">
-              <span className="text-brand text-h2 font-heading">{dueCount}</span>{" "}
-              {dueCount === 1 ? "técnica para repasar" : "técnicas para repasar"}
-            </p>
-            <Button variant="outline" nativeButton={false} render={<Link to="/review" />}>
-              Repasar
-            </Button>
-          </div>
-        </Card>
+        <div className="rounded-3xl bg-surface p-4 flex items-center justify-between">
+          <p className="text-sm">
+            <span className="text-brand font-semibold">{dueCount}</span> para repasar
+          </p>
+          <Button variant="outline" size="sm" nativeButton={false} render={<Link to="/review" />}>
+            Repasar
+          </Button>
+        </div>
       )}
 
       <div className="flex flex-col gap-4">
-        <ToggleGroup aria-label="Vista" value={[libraryView]} onValueChange={(v) => v[0] && setLibraryView(v[0])}>
-          <ToggleGroupItem value="learned">Practicadas</ToggleGroupItem>
-          <ToggleGroupItem value="saved">Todas</ToggleGroupItem>
-        </ToggleGroup>
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <ToggleGroup aria-label="Vista" value={[libraryView]} onValueChange={(v) => v[0] && setLibraryView(v[0])}>
+            <ToggleGroupItem value="learned">Practicadas</ToggleGroupItem>
+            <ToggleGroupItem value="saved">Todas</ToggleGroupItem>
+          </ToggleGroup>
 
-        <InputGroup>
-          <InputGroupInput
-            aria-label="Buscar técnicas"
-            placeholder="Buscar técnicas…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <InputGroupAddon>
-            <Search data-icon="inline-start" />
-          </InputGroupAddon>
-        </InputGroup>
+          <InputGroup className="md:max-w-xs">
+            <InputGroupInput
+              aria-label="Buscar técnicas"
+              placeholder="Buscar técnicas…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            <InputGroupAddon>
+              <Search data-icon="inline-start" />
+            </InputGroupAddon>
+          </InputGroup>
+        </div>
 
-        <ToggleGroup
-          aria-label="Posición"
-          variant="outline"
-          value={[position]}
-          onValueChange={(v) => setPosition(((v[0] as Position | "all") ?? "all"))}
-          className="-mx-4 w-auto justify-start overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:flex-wrap md:px-0"
-        >
-          <ToggleGroupItem value="all">Todas</ToggleGroupItem>
-          {POSITIONS.map((p) => (
-            <ToggleGroupItem key={p} value={p}>
-              {POSITION_LABELS[p]}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
+        {availablePositions.length >= 2 && (
+          <ToggleGroup
+            aria-label="Posición"
+            variant="outline"
+            value={[position]}
+            onValueChange={(v) => setPosition(((v[0] as Position | "all") ?? "all"))}
+            className="-mx-4 w-auto justify-start overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:flex-wrap md:px-0"
+          >
+            <ToggleGroupItem value="all">Todas</ToggleGroupItem>
+            {availablePositions.map((p) => (
+              <ToggleGroupItem key={p} value={p}>
+                {POSITION_LABELS[p]}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        )}
       </div>
 
       {isPending || sessions.isPending ? (
@@ -150,24 +152,28 @@ export default function TechniquesPage() {
           />
         )
       ) : (
-        <div className="flex flex-col gap-8">
+        <div className="flex flex-col gap-5">
           {groups.map((g) => (
-            <div key={g.position} className="flex flex-col gap-3">
+            <div key={g.position} className="flex flex-col gap-1">
               <h2 className="text-label text-muted-foreground">{POSITION_LABELS[g.position]}</h2>
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid md:grid-cols-2">
                 {g.items.map((t) => (
-                  <Link key={t.id} to={`/techniques/${t.id}`}>
-                    <Card className="flex-row items-center justify-between gap-2 px-5">
-                      <div className="flex flex-col items-start gap-1">
-                        <span className="text-sm font-medium">{t.name}</span>
-                        <Badge variant="secondary">
-                          {practicedIds.has(t.id!)
-                            ? STAGE_LABELS[techniqueProgress(evidence.filter(e => e.techniqueId === t.id))]
-                            : "Guardada"}
-                        </Badge>
-                      </div>
-                      {isDue(t) && <Badge variant="outline">Para repasar</Badge>}
-                    </Card>
+                  <Link
+                    key={t.id}
+                    to={`/techniques/${t.id}`}
+                    className="flex min-h-12 items-center justify-between gap-3 rounded-2xl px-3 py-2 hover:bg-surface"
+                  >
+                    <span className="text-sm font-medium">{t.name}</span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <span className="text-sm text-muted-foreground">
+                        {practicedIds.has(t.id!)
+                          ? STAGE_LABELS[techniqueProgress(evidence.filter((e) => e.techniqueId === t.id))]
+                          : "Guardada"}
+                      </span>
+                      {isDue(t) && (
+                        <span className="size-2 rounded-full bg-brand" role="img" aria-label="Para repasar" />
+                      )}
+                    </span>
                   </Link>
                 ))}
               </div>

@@ -12,16 +12,11 @@ import {
 } from "@/lib/labels";
 import { useDraft, useTrainingActions } from "./queries";
 import { PageHeader } from "@/components/app/page-header";
+import { Disclosure } from "@/components/app/disclosure";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ErrorNotice, Loading } from "./shared";
 import { ConfirmDelete } from "./confirm-delete";
@@ -38,6 +33,7 @@ export default function DraftPage() {
 function DraftEditor({ initial }: { initial: Draft }) {
   const [draft, setDraft] = useState(initial);
   const [error, setError] = useState<unknown>();
+  const [openTechIndex, setOpenTechIndex] = useState<number | null>(null);
   const actions = useTrainingActions();
   const navigate = useNavigate();
   const busy = actions.saveDraft.isPending || actions.confirm.isPending;
@@ -67,6 +63,16 @@ function DraftEditor({ initial }: { initial: Draft }) {
       setError(e);
     }
   }
+  async function goToCoach() {
+    try {
+      await actions.saveDraft.mutateAsync(draft);
+      navigate(
+        `/coach${draft.conversationId ? `/${draft.conversationId}` : ""}?draft=${draft.id}`,
+      );
+    } catch (e) {
+      setError(e);
+    }
+  }
   if (initial.status === "confirmed")
     return (
       <div className="flex flex-col gap-6">
@@ -90,13 +96,8 @@ function DraftEditor({ initial }: { initial: Draft }) {
             ? "Los cambios se hacen desde la clase."
             : "La clase vinculada fue eliminada."}
         </p>
-        <details className="rounded-3xl bg-surface p-5">
-          <summary className="cursor-pointer text-title">
-            Relato original
-          </summary>
-          <p className="mt-3 whitespace-pre-wrap text-sm">
-            {initial.sourceText}
-          </p>
+        <Disclosure summary="Relato original">
+          <p className="whitespace-pre-wrap text-sm">{initial.sourceText}</p>
           {initial.questions.length > 0 && (
             <ul className="mt-3 flex list-disc flex-col gap-1 pl-5 text-sm text-muted-foreground">
               {initial.questions.map((q) => (
@@ -104,25 +105,15 @@ function DraftEditor({ initial }: { initial: Draft }) {
               ))}
             </ul>
           )}
-        </details>
+        </Disclosure>
       </div>
     );
-  const toCoach = (
-    <Button
-      variant="outline"
-      disabled={busy}
-      onClick={async () => {
-        try {
-          await actions.saveDraft.mutateAsync(draft);
-          navigate(
-            `/coach${draft.conversationId ? `/${draft.conversationId}` : ""}?draft=${draft.id}`,
-          );
-        } catch (e) {
-          setError(e);
-        }
-      }}
-    >
-      {draft.questions.length ? "Responder al coach" : "Seguir con el coach"}
+  const hasMoreDetails = Boolean(
+    draft.data.whatWorked || draft.data.whatFailed || draft.data.goalNotes,
+  );
+  const confirmButton = (
+    <Button disabled={busy || !draft.data.date} onClick={() => save(true)}>
+      {busy ? "Guardando…" : "Confirmar clase"}
     </Button>
   );
   return (
@@ -130,250 +121,281 @@ function DraftEditor({ initial }: { initial: Draft }) {
       <PageHeader
         title="Revisar clase"
         back={{ to: "/drafts", label: "Borradores" }}
-        action={draft.questions.length ? undefined : toCoach}
+        action={confirmButton}
       />
       {draft.questions.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Preguntas del coach</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col items-start gap-4">
-            <ul className="flex list-disc flex-col gap-2 pl-5">
-              {draft.questions.map((q, i) => (
-                <li key={i}>{q}</li>
-              ))}
-            </ul>
-            {toCoach}
-          </CardContent>
-        </Card>
+        <div className="flex flex-col items-start gap-4 rounded-3xl bg-surface p-5">
+          <h2 className="text-title">Preguntas del coach</h2>
+          <ul className="flex list-disc flex-col gap-2 pl-5">
+            {draft.questions.map((q, i) => (
+              <li key={i}>{q}</li>
+            ))}
+          </ul>
+          <Button variant="outline" disabled={busy} onClick={goToCoach}>
+            Responder al coach
+          </Button>
+        </div>
       )}
-      <Card>
-        <CardHeader>
-          <CardTitle>Datos de la clase</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <FieldGroup>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field>
+            <FieldLabel htmlFor="draft-date">Fecha</FieldLabel>
+            <Input
+              id="draft-date"
+              type="date"
+              value={draft.data.date ?? ""}
+              onChange={(e) => patch({ date: e.target.value || null })}
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="draft-duration">Duración (min)</FieldLabel>
+            <Input
+              id="draft-duration"
+              type="number"
+              min={0}
+              max={1440}
+              value={draft.data.durationMin ?? ""}
+              onChange={(e) =>
+                patch({ durationMin: numberOrNull(e.target.value) })
+              }
+            />
+          </Field>
+        </div>
+        <div className="flex flex-col gap-5 sm:flex-row">
+          <Field>
+            <FieldLabel>Modalidad</FieldLabel>
+            <ToggleGroup
+              value={draft.data.style ? [draft.data.style] : []}
+              onValueChange={(v) =>
+                patch({ style: (v[0] as DraftData["style"]) ?? null })
+              }
+            >
+              <ToggleGroupItem value="gi">Gi</ToggleGroupItem>
+              <ToggleGroupItem value="nogi">No-gi</ToggleGroupItem>
+            </ToggleGroup>
+          </Field>
+          <Field>
+            <FieldLabel>Energía</FieldLabel>
+            <ToggleGroup
+              value={draft.data.energy ? [String(draft.data.energy)] : []}
+              onValueChange={(v) =>
+                patch({
+                  energy: v[0] ? (Number(v[0]) as DraftData["energy"]) : null,
+                })
+              }
+            >
+              {[1, 2, 3, 4, 5].map((n) => (
+                <ToggleGroupItem key={n} value={String(n)}>
+                  {n}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </Field>
+        </div>
+        <Field>
+          <FieldLabel htmlFor="classTopic">Tema de la clase</FieldLabel>
+          <Textarea
+            id="classTopic"
+            value={draft.data.classTopic}
+            onChange={(e) => patch({ classTopic: e.target.value })}
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="nextFocus">Foco para la próxima clase</FieldLabel>
+          <Textarea
+            id="nextFocus"
+            value={draft.data.nextFocus}
+            onChange={(e) => patch({ nextFocus: e.target.value })}
+          />
+        </Field>
+        <Disclosure summary="Más detalles" defaultOpen={hasMoreDetails}>
           <FieldGroup>
-            <div className="grid gap-5 sm:grid-cols-2">
+            <Field>
+              <FieldLabel htmlFor="whatWorked">Qué funcionó</FieldLabel>
+              <Textarea
+                id="whatWorked"
+                value={draft.data.whatWorked}
+                onChange={(e) => patch({ whatWorked: e.target.value })}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="whatFailed">Qué te costó</FieldLabel>
+              <Textarea
+                id="whatFailed"
+                value={draft.data.whatFailed}
+                onChange={(e) => patch({ whatFailed: e.target.value })}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="goalNotes">
+                Qué pasó con tu objetivo
+              </FieldLabel>
+              <Textarea
+                id="goalNotes"
+                value={draft.data.goalNotes}
+                onChange={(e) => patch({ goalNotes: e.target.value })}
+              />
+            </Field>
+          </FieldGroup>
+        </Disclosure>
+      </FieldGroup>
+      <div className="flex flex-col gap-4">
+        <h2 className="text-title">Técnicas</h2>
+        {draft.data.techniques.map((t, i) => (
+          <Disclosure
+            key={i}
+            className="rounded-2xl bg-surface px-4 py-0.5 open:pb-4"
+            defaultOpen={openTechIndex === i}
+            summary={
+              <span className="flex flex-1 flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span className="font-medium text-foreground">
+                  {t.name || "Técnica"}
+                </span>
+                <span>
+                  · {STAGE_LABELS[t.stage]} · {POSITION_LABELS[t.position]}
+                </span>
+              </span>
+            }
+          >
+            <FieldGroup>
               <Field>
-                <FieldLabel htmlFor="draft-date">Fecha</FieldLabel>
+                <FieldLabel htmlFor={`tech-${i}`}>Nombre</FieldLabel>
                 <Input
-                  id="draft-date"
-                  type="date"
-                  value={draft.data.date ?? ""}
-                  onChange={(e) => patch({ date: e.target.value || null })}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="draft-duration">Duración (min)</FieldLabel>
-                <Input
-                  id="draft-duration"
-                  type="number"
-                  min={0}
-                  max={1440}
-                  value={draft.data.durationMin ?? ""}
+                  id={`tech-${i}`}
+                  value={t.name}
                   onChange={(e) =>
-                    patch({ durationMin: numberOrNull(e.target.value) })
+                    patchTechnique(i, {
+                      name: e.target.value,
+                      catalogId: null,
+                    })
                   }
                 />
               </Field>
-            </div>
-            <Field>
-              <FieldLabel>Modalidad</FieldLabel>
-              <ToggleGroup
-                value={draft.data.style ? [draft.data.style] : []}
-                onValueChange={(v) =>
-                  patch({ style: (v[0] as DraftData["style"]) ?? null })
-                }
-              >
-                <ToggleGroupItem value="gi">Gi</ToggleGroupItem>
-                <ToggleGroupItem value="nogi">No-gi</ToggleGroupItem>
-              </ToggleGroup>
-            </Field>
-            <Field>
-              <FieldLabel>Energía</FieldLabel>
-              <ToggleGroup
-                value={draft.data.energy ? [String(draft.data.energy)] : []}
-                onValueChange={(v) =>
-                  patch({
-                    energy: v[0] ? (Number(v[0]) as DraftData["energy"]) : null,
-                  })
-                }
-              >
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <ToggleGroupItem key={n} value={String(n)}>
-                    {n}
-                  </ToggleGroupItem>
-                ))}
-              </ToggleGroup>
-            </Field>
-            {(
-              [
-                ["classTopic", "Tema de la clase"],
-                ["whatWorked", "Qué funcionó"],
-                ["whatFailed", "Qué te costó"],
-                ["nextFocus", "Foco para la próxima clase"],
-                ["goalNotes", "Qué pasó con tu objetivo"],
-              ] as const
-            ).map(([key, label]) => (
-              <Field key={key}>
-                <FieldLabel htmlFor={key}>{label}</FieldLabel>
-                <Textarea
-                  id={key}
-                  value={draft.data[key]}
-                  onChange={(e) => patch({ [key]: e.target.value })}
-                />
-              </Field>
-            ))}
-          </FieldGroup>
-        </CardContent>
-      </Card>
-      <div className="flex flex-col gap-4">
-        <h2 className="text-h3">Técnicas</h2>
-        {draft.data.techniques.map((t, i) => (
-          <Card key={i}>
-            <CardHeader>
-              <CardTitle>{t.name || "Técnica"}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <FieldGroup>
-                <Field>
-                  <FieldLabel htmlFor={`tech-${i}`}>Nombre</FieldLabel>
-                  <Input
-                    id={`tech-${i}`}
-                    value={t.name}
-                    onChange={(e) =>
-                      patchTechnique(i, {
-                        name: e.target.value,
-                        catalogId: null,
-                      })
-                    }
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor={`pos-${i}`}>Posición</FieldLabel>
-                  <select
-                    className="training-select"
-                    id={`pos-${i}`}
-                    value={t.position}
-                    onChange={(e) =>
-                      patchTechnique(i, {
-                        position: e.target.value as typeof t.position,
-                      })
-                    }
-                  >
-                    {POSITIONS.map((p) => (
-                      <option key={p} value={p}>
-                        {POSITION_LABELS[p]}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor={`type-${i}`}>Tipo</FieldLabel>
-                  <select
-                    className="training-select"
-                    id={`type-${i}`}
-                    value={t.type}
-                    onChange={(e) =>
-                      patchTechnique(i, {
-                        type: e.target.value as typeof t.type,
-                      })
-                    }
-                  >
-                    {TECHNIQUE_TYPES.map((p) => (
-                      <option key={p} value={p}>
-                        {TECHNIQUE_TYPE_LABELS[p]}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field>
-                  <FieldLabel>Experiencia</FieldLabel>
-                  <ToggleGroup
-                    className="flex-wrap"
-                    value={[t.stage]}
-                    onValueChange={(v) =>
-                      v[0] &&
-                      patchTechnique(i, { stage: v[0] as typeof t.stage })
-                    }
-                  >
-                    {Object.entries(STAGE_LABELS).map(([value, label]) => (
-                      <ToggleGroupItem key={value} value={value}>
-                        {label}
-                      </ToggleGroupItem>
-                    ))}
-                  </ToggleGroup>
-                </Field>
-                <Field>
-                  <FieldLabel>Identificación</FieldLabel>
-                  <ToggleGroup
-                    value={[t.identification]}
-                    onValueChange={(v) =>
-                      v[0] &&
-                      patchTechnique(i, {
-                        identification: v[0] as typeof t.identification,
-                      })
-                    }
-                  >
-                    <ToggleGroupItem value="tentative">
-                      Provisional
-                    </ToggleGroupItem>
-                    <ToggleGroupItem value="confirmed">
-                      Confirmada
-                    </ToggleGroupItem>
-                  </ToggleGroup>
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor={`notes-${i}`}>Notas</FieldLabel>
-                  <Textarea
-                    id={`notes-${i}`}
-                    value={t.notes}
-                    onChange={(e) =>
-                      patchTechnique(i, { notes: e.target.value })
-                    }
-                  />
-                </Field>
-                <div className="grid grid-cols-2 gap-3">
-                  {(["attempts", "successes"] as const).map((k) => (
-                    <Field key={k}>
-                      <FieldLabel htmlFor={`${k}-${i}`}>
-                        {k === "attempts" ? "Intentos" : "Éxitos"}
-                      </FieldLabel>
-                      <Input
-                        id={`${k}-${i}`}
-                        type="number"
-                        min={0}
-                        value={t[k] ?? ""}
-                        onChange={(e) =>
-                          patchTechnique(i, {
-                            [k]: numberOrNull(e.target.value),
-                          })
-                        }
-                      />
-                    </Field>
-                  ))}
-                </div>
-                <Button
-                  variant="ghost"
-                  className="self-start"
-                  onClick={() =>
-                    patch({
-                      techniques: draft.data.techniques.filter(
-                        (_, j) => j !== i,
-                      ),
+              <Field>
+                <FieldLabel htmlFor={`pos-${i}`}>Posición</FieldLabel>
+                <select
+                  className="training-select"
+                  id={`pos-${i}`}
+                  value={t.position}
+                  onChange={(e) =>
+                    patchTechnique(i, {
+                      position: e.target.value as typeof t.position,
                     })
                   }
                 >
-                  Quitar técnica
-                </Button>
-              </FieldGroup>
-            </CardContent>
-          </Card>
+                  {POSITIONS.map((p) => (
+                    <option key={p} value={p}>
+                      {POSITION_LABELS[p]}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor={`type-${i}`}>Tipo</FieldLabel>
+                <select
+                  className="training-select"
+                  id={`type-${i}`}
+                  value={t.type}
+                  onChange={(e) =>
+                    patchTechnique(i, {
+                      type: e.target.value as typeof t.type,
+                    })
+                  }
+                >
+                  {TECHNIQUE_TYPES.map((p) => (
+                    <option key={p} value={p}>
+                      {TECHNIQUE_TYPE_LABELS[p]}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field>
+                <FieldLabel>Experiencia</FieldLabel>
+                <ToggleGroup
+                  className="flex-wrap"
+                  value={[t.stage]}
+                  onValueChange={(v) =>
+                    v[0] &&
+                    patchTechnique(i, { stage: v[0] as typeof t.stage })
+                  }
+                >
+                  {Object.entries(STAGE_LABELS).map(([value, label]) => (
+                    <ToggleGroupItem key={value} value={value}>
+                      {label}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+              </Field>
+              <Field>
+                <FieldLabel>Identificación</FieldLabel>
+                <ToggleGroup
+                  value={[t.identification]}
+                  onValueChange={(v) =>
+                    v[0] &&
+                    patchTechnique(i, {
+                      identification: v[0] as typeof t.identification,
+                    })
+                  }
+                >
+                  <ToggleGroupItem value="tentative">
+                    Provisional
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="confirmed">
+                    Confirmada
+                  </ToggleGroupItem>
+                </ToggleGroup>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor={`notes-${i}`}>Notas</FieldLabel>
+                <Textarea
+                  id={`notes-${i}`}
+                  value={t.notes}
+                  onChange={(e) =>
+                    patchTechnique(i, { notes: e.target.value })
+                  }
+                />
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                {(["attempts", "successes"] as const).map((k) => (
+                  <Field key={k}>
+                    <FieldLabel htmlFor={`${k}-${i}`}>
+                      {k === "attempts" ? "Intentos" : "Éxitos"}
+                    </FieldLabel>
+                    <Input
+                      id={`${k}-${i}`}
+                      type="number"
+                      min={0}
+                      value={t[k] ?? ""}
+                      onChange={(e) =>
+                        patchTechnique(i, {
+                          [k]: numberOrNull(e.target.value),
+                        })
+                      }
+                    />
+                  </Field>
+                ))}
+              </div>
+              <Button
+                variant="ghost"
+                className="self-start"
+                onClick={() =>
+                  patch({
+                    techniques: draft.data.techniques.filter(
+                      (_, j) => j !== i,
+                    ),
+                  })
+                }
+              >
+                Quitar técnica
+              </Button>
+            </FieldGroup>
+          </Disclosure>
         ))}
         <Button
           variant="outline"
           className="self-start"
-          onClick={() =>
+          onClick={() => {
+            const newIndex = draft.data.techniques.length;
             patch({
               techniques: [
                 ...draft.data.techniques,
@@ -389,20 +411,22 @@ function DraftEditor({ initial }: { initial: Draft }) {
                   successes: null,
                 },
               ],
-            })
-          }
+            });
+            setOpenTechIndex(newIndex);
+          }}
         >
           Agregar técnica
         </Button>
       </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>Rolls</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {draft.data.rolls.map((r, i) => (
-            <FieldGroup key={i}>
-              <p className="text-sm font-medium">Roll {i + 1}</p>
+      <div className="flex flex-col gap-4">
+        <h2 className="text-title">Rolls</h2>
+        {draft.data.rolls.map((r, i) => (
+          <Disclosure
+            key={i}
+            className="rounded-2xl bg-surface px-4 py-0.5 open:pb-4"
+            summary={`Roll ${i + 1} · ${r.partnerName || "Sin nombre"} · ${label(OUTCOME_LABELS, r.outcome)}`}
+          >
+            <FieldGroup>
               <Field>
                 <FieldLabel htmlFor={`partner-${i}`}>Compañero</FieldLabel>
                 <Input
@@ -447,28 +471,27 @@ function DraftEditor({ initial }: { initial: Draft }) {
                 Quitar roll
               </Button>
             </FieldGroup>
-          ))}
-          {!draft.data.rolls.length && (
-            <p className="text-muted-foreground">Sin rolls.</p>
-          )}
-        </CardContent>
-      </Card>
-      <details className="rounded-3xl bg-surface p-5">
-        <summary className="cursor-pointer text-title">Relato original</summary>
-        <p className="mt-3 whitespace-pre-wrap text-sm">{draft.sourceText}</p>
-      </details>
+          </Disclosure>
+        ))}
+        {!draft.data.rolls.length && (
+          <p className="text-muted-foreground">Sin rolls.</p>
+        )}
+      </div>
+      <Disclosure summary="Relato original">
+        <p className="whitespace-pre-wrap text-sm">{draft.sourceText}</p>
+      </Disclosure>
       <ErrorNotice error={error} />
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap gap-2">
-          <Button
-            disabled={busy || !draft.data.date}
-            onClick={() => save(true)}
-          >
-            {busy ? "Guardando…" : "Confirmar clase"}
-          </Button>
+          {confirmButton}
           <Button variant="outline" disabled={busy} onClick={() => save()}>
             Guardar borrador
           </Button>
+          {!draft.questions.length && (
+            <Button variant="ghost" disabled={busy} onClick={goToCoach}>
+              Seguir con el coach
+            </Button>
+          )}
         </div>
         {!draft.data.date && (
           <p className="text-sm text-muted-foreground">

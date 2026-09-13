@@ -10,7 +10,7 @@ export function Composer({
   onSend,
   busy,
   label = "Mensaje para el coach",
-  placeholder = "Hoy practicamos… Me costó… Quiero trabajar…",
+  placeholder = "Hoy practicamos… Me costó…",
 }: {
   value: string;
   onChange: (text: string) => void;
@@ -22,9 +22,10 @@ export function Composer({
   const audio = useAudio((text) =>
     onChange(value ? `${value}\n${text}` : text),
   );
-  const canSend = !!value.trim() && !busy && !audio.busy && !audio.recording;
+  const locked = busy || audio.busy || audio.recording;
+  const canSend = !!value.trim() && !locked;
   return (
-    <div className="flex flex-col gap-3 rounded-3xl bg-surface p-4">
+    <div className="flex flex-col gap-2 rounded-3xl bg-surface p-2">
       <Field>
         <FieldLabel htmlFor="coach-entry" className="sr-only">
           {label}
@@ -34,8 +35,8 @@ export function Composer({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          rows={4}
-          disabled={busy || audio.busy || audio.recording}
+          className="max-h-72 min-h-14 resize-none bg-background"
+          disabled={locked}
           maxLength={20000}
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && canSend) {
@@ -45,62 +46,66 @@ export function Composer({
           }}
         />
       </Field>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex items-center gap-1">
         <Button
-          variant="outline"
+          variant={audio.recording ? "default" : "ghost"}
+          size={audio.recording ? "default" : "icon"}
+          aria-label={audio.recording ? "Terminar audio" : "Grabar audio"}
           onClick={audio.recording ? audio.stop : audio.start}
           disabled={busy || audio.busy}
         >
-          {audio.recording ? (
-            <Square data-icon="inline-start" />
-          ) : (
-            <Mic data-icon="inline-start" />
-          )}
-          {audio.recording ? "Terminar audio" : "Grabar"}
+          {audio.recording ? <Square data-icon="inline-start" /> : <Mic />}
+          {audio.recording && "Terminar"}
         </Button>
-        <Button
-          variant="ghost"
-          nativeButton={false}
-          render={<label />}
-          disabled={busy || audio.busy || audio.recording}
+        {!audio.recording && (
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Subir audio"
+            nativeButton={false}
+            render={<label />}
+            disabled={locked}
+          >
+            <Paperclip />
+            <input
+              type="file"
+              accept="audio/*"
+              className="sr-only"
+              disabled={locked}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void audio.transcribe(f);
+                e.target.value = "";
+              }}
+            />
+          </Button>
+        )}
+        <p
+          className={
+            audio.recording || audio.busy || busy
+              ? "min-w-0 flex-1 truncate px-2 text-xs text-muted-foreground"
+              : "sr-only"
+          }
+          aria-live="polite"
         >
-          <Paperclip data-icon="inline-start" />
-          <span>Subir audio</span>
-          <input
-            type="file"
-            accept="audio/*"
-            className="sr-only"
-            disabled={busy || audio.busy || audio.recording}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) void audio.transcribe(f);
-              e.target.value = "";
-            }}
-          />
-        </Button>
+          {audio.recording
+            ? "Grabando, hasta 5 minutos"
+            : audio.busy
+              ? "Transcribiendo…"
+              : busy
+                ? "Pensando…"
+                : null}
+        </p>
         <Button
           className="ml-auto"
+          size="icon"
+          aria-label="Enviar"
           disabled={!canSend}
           onClick={onSend}
         >
-          <ArrowUp data-icon="inline-start" />
-          {busy ? "Pensando…" : "Enviar"}
+          <ArrowUp />
         </Button>
       </div>
-      <p
-        className={
-          audio.recording || audio.busy
-            ? "text-xs text-muted-foreground"
-            : "sr-only"
-        }
-        aria-live="polite"
-      >
-        {audio.recording
-          ? "Grabando. Se detiene a los 5 minutos."
-          : audio.busy
-            ? "Transcribiendo el audio…"
-            : null}
-      </p>
       <ErrorNotice error={audio.error} />
       {audio.error && audio.retry && (
         <Button

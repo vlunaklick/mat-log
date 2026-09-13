@@ -1,10 +1,8 @@
 import { Link } from "react-router-dom";
+import { ChevronRight } from "lucide-react";
 import { useSessions, useSettings } from "@/lib/queries";
 import { PageHeader } from "@/components/app/page-header";
-import { StatTile } from "@/components/app/stat-tile";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDrafts } from "../training/queries";
@@ -22,20 +20,22 @@ function startOfWeekISO(iso: string): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-function computeStreakWeeks(sessions: Session[]): number {
-  if (sessions.length === 0) return 0;
-  const weekStarts = new Set(sessions.map((s) => startOfWeekISO(s.date)));
-  const currentWeekStart = startOfWeekISO(todayISO());
-  let streak = 0;
-  let cursor = currentWeekStart;
-  while (weekStarts.has(cursor)) {
-    streak += 1;
-    const [y, m, d] = cursor.split("-").map(Number);
-    const date = new Date(y, m - 1, d);
-    date.setDate(date.getDate() - 7);
-    cursor = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+function monthLabel(iso: string): string {
+  const [y, m] = iso.split("-").map(Number);
+  const label = new Date(y, m - 1, 1).toLocaleDateString("es", { month: "long", year: "numeric" });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+/** Sessions arrive newest first; consecutive rows of the same month share a group. */
+function groupByMonth(sessions: Session[]) {
+  const groups: { month: string; items: Session[] }[] = [];
+  for (const s of sessions) {
+    const month = s.date.slice(0, 7);
+    const group = groups[groups.length - 1];
+    if (group?.month === month) group.items.push(s);
+    else groups.push({ month, items: [s] });
   }
-  return streak;
+  return groups;
 }
 
 export default function JournalPage() {
@@ -47,16 +47,16 @@ export default function JournalPage() {
   const weeklyGoal = settings?.weeklyGoalSessions ?? 3;
   const currentWeekStart = startOfWeekISO(todayISO());
   const sessionsThisWeek = (sessions ?? []).filter((s) => startOfWeekISO(s.date) === currentWeekStart).length;
-  const streakWeeks = computeStreakWeeks(sessions ?? []);
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Diario"
+        lead={sessions ? `${sessionsThisWeek} de ${weeklyGoal} clases esta semana` : undefined}
         action={
           <>
-            <Button variant="outline" nativeButton={false} render={<Link to="/session/new" />}>Registro manual</Button>
             <Button nativeButton={false} render={<Link to="/coach?mode=log" />}>Contar mi clase</Button>
+            <Button variant="ghost" nativeButton={false} render={<Link to="/session/new" />}>Registro manual</Button>
           </>
         }
       />
@@ -67,21 +67,22 @@ export default function JournalPage() {
         </Alert>
       )}
 
-      {drafts && drafts.length > 0 && (
-        <Link to="/drafts" className="-mt-2 w-fit text-sm text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline">
-          Borradores{pendingDrafts > 0 ? ` · ${pendingDrafts} sin confirmar` : ""}
+      <div className="-mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+        <Link to="/progress" className="text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline">
+          Ver progreso
         </Link>
-      )}
-
-      <div className="grid grid-cols-2 gap-3">
-        <StatTile label="Esta semana" value={`${sessionsThisWeek} / ${weeklyGoal}`} hint="clases" />
-        <StatTile label="Racha" value={streakWeeks} hint={streakWeeks === 1 ? "semana" : "semanas"} highlight={streakWeeks >= 2} />
+        {drafts && drafts.length > 0 && (
+          <Link to="/drafts" className="text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline">
+            Borradores{pendingDrafts > 0 ? ` · ${pendingDrafts} sin confirmar` : ""}
+          </Link>
+        )}
       </div>
 
       {isPending ? (
-        <div className="grid gap-3 md:grid-cols-2">
-          <Skeleton className="h-32 rounded-3xl" />
-          <Skeleton className="h-32 rounded-3xl" />
+        <div className="flex flex-col gap-2">
+          <Skeleton className="h-14 rounded-2xl" />
+          <Skeleton className="h-14 rounded-2xl" />
+          <Skeleton className="h-14 rounded-2xl" />
         </div>
       ) : !sessions || sessions.length === 0 ? (
         <Blank
@@ -89,27 +90,36 @@ export default function JournalPage() {
           action={<Button nativeButton={false} render={<Link to="/coach?mode=log" />}>Contar mi primera clase</Button>}
         />
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
-          {sessions.map((s) => (
-            <Link key={s.id} to={`/session/${s.id}`}>
-              <Card className="transition-colors hover:bg-surface">
-                <CardHeader>
-                  <div className="flex items-center justify-between gap-2">
-                    <CardTitle>{formatDate(s.date)}</CardTitle>
-                    <Badge variant="outline">{s.style ? STYLE_LABELS[s.style] : "Sin modalidad"}</Badge>
-                  </div>
-                  <CardDescription>
-                    {s.durationMin === null ? "Sin duración" : `${s.durationMin} min`} &middot; {s.rolls.length} roll{s.rolls.length === 1 ? "" : "s"}
-                  </CardDescription>
-                </CardHeader>
-                {(s.classTopic || s.nextFocus) && (
-                  <CardContent className="flex flex-col gap-1">
-                    {s.classTopic && <p className="text-sm text-foreground">{s.classTopic}</p>}
-                    {s.nextFocus && <p className="text-sm text-muted-foreground">Próximo foco: {s.nextFocus}</p>}
-                  </CardContent>
-                )}
-              </Card>
-            </Link>
+        <div className="flex flex-col gap-6">
+          {groupByMonth(sessions).map((g) => (
+            <section key={g.month} className="flex flex-col gap-1">
+              <h2 className="text-label text-muted-foreground">{monthLabel(g.month)}</h2>
+              <ul className="-mx-3 flex flex-col">
+                {g.items.map((s) => (
+                  <li key={s.id}>
+                    <Link
+                      to={`/session/${s.id}`}
+                      className="flex min-h-14 items-center gap-3 rounded-2xl px-3 py-2 transition-colors hover:bg-surface"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium">{s.classTopic || "Clase sin tema"}</span>
+                        <span className="block truncate text-sm text-muted-foreground">
+                          {[
+                            formatDate(s.date),
+                            s.style ? STYLE_LABELS[s.style] : null,
+                            s.durationMin === null ? null : `${s.durationMin} min`,
+                            s.rolls.length ? `${s.rolls.length} roll${s.rolls.length === 1 ? "" : "s"}` : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                      </span>
+                      <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
           ))}
         </div>
       )}

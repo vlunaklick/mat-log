@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useTechniqueMutations, useTechniques } from "@/lib/queries";
 import { POSITIONS, TECHNIQUE_TYPES, type Position, type Technique, type TechniqueType } from "@/lib/types";
 import { PageHeader } from "@/components/app/page-header";
+import { Disclosure } from "@/components/app/disclosure";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
@@ -177,30 +178,34 @@ function TechniqueForm({
           />
         </Field>
 
-        <Field>
-          <FieldLabel htmlFor="mistakes">Errores comunes</FieldLabel>
-          <Textarea id="mistakes" value={mistakes} onChange={(e) => setMistakes(e.target.value)} />
-        </Field>
+        <Disclosure summary="Más campos" defaultOpen={Boolean(mistakes || videoUrl)}>
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="mistakes">Errores comunes</FieldLabel>
+              <Textarea id="mistakes" value={mistakes} onChange={(e) => setMistakes(e.target.value)} />
+            </Field>
 
-        <Field>
-          <FieldLabel htmlFor="video">Video</FieldLabel>
-          <InputGroup>
-            <InputGroupInput id="video" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://..." type="url" />
-            <InputGroupAddon align="inline-end">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Abrir video"
-                disabled={!videoUrl.trim()}
-                nativeButton={false}
-                render={<a href={videoUrl.trim() || undefined} target="_blank" rel="noreferrer" />}
-              >
-                <ExternalLink />
-              </Button>
-            </InputGroupAddon>
-          </InputGroup>
-        </Field>
+            <Field>
+              <FieldLabel htmlFor="video">Video</FieldLabel>
+              <InputGroup>
+                <InputGroupInput id="video" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://..." type="url" />
+                <InputGroupAddon align="inline-end">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Abrir video"
+                    disabled={!videoUrl.trim()}
+                    nativeButton={false}
+                    render={<a href={videoUrl.trim() || undefined} target="_blank" rel="noreferrer" />}
+                  >
+                    <ExternalLink />
+                  </Button>
+                </InputGroupAddon>
+              </InputGroup>
+            </Field>
+          </FieldGroup>
+        </Disclosure>
       </FieldGroup>
 
       <div className="flex flex-col gap-2 md:flex-row md:items-center">

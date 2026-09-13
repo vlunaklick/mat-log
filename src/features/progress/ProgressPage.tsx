@@ -20,7 +20,8 @@ import { BELT_LABELS, OUTCOME_LABELS, POSITION_LABELS } from "@/lib/labels";
 import type { RollOutcome } from "@/lib/types";
 import { PageHeader } from "@/components/app/page-header";
 import { StatTile } from "@/components/app/stat-tile";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Disclosure } from "@/components/app/disclosure";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -126,7 +127,6 @@ export default function ProgressPage() {
         <StatTile
           label="Horas"
           value={withoutDuration < sessions.length ? stats.hours.toLocaleString("es", { maximumFractionDigits: 1 }) : "—"}
-          hint={withoutDuration > 0 ? `${withoutDuration} ${withoutDuration === 1 ? "clase" : "clases"} sin duración` : undefined}
         />
         <StatTile label="Clases" value={stats.count} />
         <StatTile label="Semanas seguidas" value={stats.streak} highlight={stats.streak >= 2} />
@@ -135,11 +135,14 @@ export default function ProgressPage() {
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card className="md:col-span-2">
-          <CardHeader>
+          <CardHeader className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle>Últimas 12 semanas</CardTitle>
-            <CardDescription>
-              Clases por semana. La línea punteada es tu meta de {weeklyGoal}.
-            </CardDescription>
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <svg width="16" height="2" aria-hidden="true">
+                <line x1={0} x2={16} y1={1} y2={1} stroke="var(--chart-2)" strokeWidth={1} strokeDasharray="4 3" />
+              </svg>
+              Meta: {weeklyGoal}
+            </span>
           </CardHeader>
           <CardContent>
             <svg viewBox="0 0 240 100" className="mt-2 h-28 w-full" preserveAspectRatio="none">
@@ -174,6 +177,11 @@ export default function ProgressPage() {
               <span>{formatDate(stats.weekly[0].weekStart)}</span>
               <span>{formatDate(stats.weekly[stats.weekly.length - 1].weekStart)}</span>
             </div>
+            {withoutDuration > 0 && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                {withoutDuration} {withoutDuration === 1 ? "clase" : "clases"} sin duración
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -255,26 +263,28 @@ export default function ProgressPage() {
             )}
 
             {stats.byBelt.length > 0 && (
-              <table className="mt-4 w-full text-sm">
-                <thead>
-                  <tr className="text-label text-muted-foreground">
-                    <th className="py-1 text-left font-medium">Compañero</th>
-                    <th className="py-1 text-right font-medium">Rolls</th>
-                    <th className="py-1 text-right font-medium">A favor</th>
-                    <th className="py-1 text-right font-medium">En contra</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {stats.byBelt.map((b) => (
-                    <tr key={b.belt} className="border-t border-border-soft">
-                      <td className="py-1.5">{BELT_LABELS[b.belt]}</td>
-                      <td className="py-1.5 text-right">{b.rolls}</td>
-                      <td className="py-1.5 text-right">{b.wonOrDominated}</td>
-                      <td className="py-1.5 text-right">{b.lostOrSurvived}</td>
+              <Disclosure summary="Por cinturón" className="mt-4">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-label text-muted-foreground">
+                      <th className="py-1 text-left font-medium">Compañero</th>
+                      <th className="py-1 text-right font-medium">Rolls</th>
+                      <th className="py-1 text-right font-medium">A favor</th>
+                      <th className="py-1 text-right font-medium">En contra</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {stats.byBelt.map((b) => (
+                      <tr key={b.belt} className="border-t border-border-soft">
+                        <td className="py-1.5">{BELT_LABELS[b.belt]}</td>
+                        <td className="py-1.5 text-right">{b.rolls}</td>
+                        <td className="py-1.5 text-right">{b.wonOrDominated}</td>
+                        <td className="py-1.5 text-right">{b.lostOrSurvived}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Disclosure>
             )}
           </CardContent>
         </Card>
@@ -336,14 +346,28 @@ export default function ProgressPage() {
             {stats.focus.length === 0 ? (
               <p className="text-sm text-muted-foreground">Todavía no anotaste un foco.</p>
             ) : (
-              <ul className="flex flex-col gap-2">
-                {stats.focus.map((f) => (
-                  <li key={f.date} className="text-sm">
-                    <span className="text-muted-foreground">{formatDate(f.date)}: </span>
-                    <span>{f.nextFocus}</span>
-                  </li>
-                ))}
-              </ul>
+              <>
+                <ul className="flex flex-col gap-2">
+                  {stats.focus.slice(0, 2).map((f) => (
+                    <li key={f.date} className="text-sm">
+                      <span className="text-muted-foreground">{formatDate(f.date)}: </span>
+                      <span>{f.nextFocus}</span>
+                    </li>
+                  ))}
+                </ul>
+                {stats.focus.length > 2 && (
+                  <Disclosure summary="Ver más" className="mt-2">
+                    <ul className="flex flex-col gap-2">
+                      {stats.focus.slice(2).map((f) => (
+                        <li key={f.date} className="text-sm">
+                          <span className="text-muted-foreground">{formatDate(f.date)}: </span>
+                          <span>{f.nextFocus}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </Disclosure>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

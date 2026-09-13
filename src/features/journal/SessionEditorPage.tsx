@@ -6,14 +6,14 @@ import { X } from "lucide-react";
 import { toast } from "sonner";
 import { useSessionMutations, useSessions, useTechniques } from "@/lib/queries";
 import { todayISO } from "../../lib/date";
-import { BELT_LABELS, OUTCOME_LABELS, POSITION_LABELS } from "../../lib/labels";
+import { BELT_LABELS, OUTCOME_LABELS, POSITION_LABELS, label } from "../../lib/labels";
 import { POSITIONS, type Position, type Roll, type RollOutcome, type Session, type Style } from "../../lib/types";
 import { PageHeader } from "@/components/app/page-header";
+import { Disclosure } from "@/components/app/disclosure";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -72,13 +72,31 @@ function SessionForm({ initial }: { initial: Session }) {
   const [whatWorked, setWhatWorked] = useState(initial.whatWorked);
   const [whatFailed, setWhatFailed] = useState(initial.whatFailed);
   const [nextFocus, setNextFocus] = useState(initial.nextFocus);
+  const [techniqueQuery, setTechniqueQuery] = useState("");
+  const [openRollIndex, setOpenRollIndex] = useState<number | null>(null);
 
   const isEditing = initial.id !== undefined;
   const saving = create.isPending || update.isPending;
   const saveError = create.error ?? update.error;
 
+  const selectedTechniques = techniqueIds
+    .map((id) => techniques?.find((t) => t.id === id))
+    .filter((t): t is NonNullable<typeof t> => Boolean(t));
+  const techniqueMatches = (() => {
+    const q = techniqueQuery.trim().toLowerCase();
+    if (!q) return [];
+    return (techniques ?? [])
+      .filter((t) => t.id !== undefined && !techniqueIds.includes(t.id) && t.name.toLowerCase().includes(q))
+      .slice(0, 8);
+  })();
+
   function updateRoll(index: number, patch: Partial<Roll>) {
     setRolls((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+  }
+
+  function addRoll() {
+    setOpenRollIndex(rolls.length);
+    setRolls((prev) => [...prev, emptyRoll()]);
   }
 
   function removeRoll(index: number) {
@@ -122,197 +140,224 @@ function SessionForm({ initial }: { initial: Session }) {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-[720px] flex-col gap-8">
       <PageHeader title={isEditing ? "Editar clase" : "Registrar clase"} back={{ to: "/journal", label: "Diario" }} />
 
-      <Card>
-        <CardContent>
-          <FieldGroup>
-            <div className="grid gap-5 sm:grid-cols-2">
-              <Field>
-                <FieldLabel htmlFor="date">Fecha</FieldLabel>
-                <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="duration">Duración (min)</FieldLabel>
-                <Input
-                  id="duration"
-                  type="number"
-                  min={0}
-                  value={durationMin ?? ""}
-                  onChange={(e) => setDurationMin(e.target.value === "" ? null : Number(e.target.value))}
-                />
-              </Field>
-            </div>
+      <FieldGroup>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field>
+            <FieldLabel htmlFor="date">Fecha</FieldLabel>
+            <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="duration">Duración (min)</FieldLabel>
+            <Input
+              id="duration"
+              type="number"
+              min={0}
+              value={durationMin ?? ""}
+              onChange={(e) => setDurationMin(e.target.value === "" ? null : Number(e.target.value))}
+            />
+          </Field>
+        </div>
 
-            <div className="flex flex-col gap-5 sm:flex-row">
-              <Field>
-                <FieldLabel>Modalidad</FieldLabel>
-                <ToggleGroup value={style ? [style] : []} onValueChange={(v) => v[0] && setStyle(v[0] as Style)}>
-                  <ToggleGroupItem value="gi">Gi</ToggleGroupItem>
-                  <ToggleGroupItem value="nogi">No-gi</ToggleGroupItem>
-                </ToggleGroup>
-              </Field>
+        <div className="flex flex-col gap-5 sm:flex-row">
+          <Field>
+            <FieldLabel>Modalidad</FieldLabel>
+            <ToggleGroup value={style ? [style] : []} onValueChange={(v) => v[0] && setStyle(v[0] as Style)}>
+              <ToggleGroupItem value="gi">Gi</ToggleGroupItem>
+              <ToggleGroupItem value="nogi">No-gi</ToggleGroupItem>
+            </ToggleGroup>
+          </Field>
 
-              <Field>
-                <FieldLabel>Energía</FieldLabel>
-                <ToggleGroup value={energy === null ? [] : [String(energy)]} onValueChange={(v) => v[0] && setEnergy(Number(v[0]) as 1 | 2 | 3 | 4 | 5)}>
-                  {([1, 2, 3, 4, 5] as const).map((n) => (
-                    <ToggleGroupItem key={n} value={String(n)}>
-                      {n}
-                    </ToggleGroupItem>
-                  ))}
-                </ToggleGroup>
-              </Field>
-            </div>
+          <Field>
+            <FieldLabel>Energía</FieldLabel>
+            <ToggleGroup value={energy === null ? [] : [String(energy)]} onValueChange={(v) => v[0] && setEnergy(Number(v[0]) as 1 | 2 | 3 | 4 | 5)}>
+              {([1, 2, 3, 4, 5] as const).map((n) => (
+                <ToggleGroupItem key={n} value={String(n)}>
+                  {n}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </Field>
+        </div>
 
-            <Field>
-              <FieldLabel htmlFor="classTopic">Tema de la clase</FieldLabel>
-              <Input id="classTopic" value={classTopic} onChange={(e) => setClassTopic(e.target.value)} placeholder="Ej: pasajes desde media guardia" />
-            </Field>
+        <Field>
+          <FieldLabel htmlFor="classTopic">Tema de la clase</FieldLabel>
+          <Input id="classTopic" value={classTopic} onChange={(e) => setClassTopic(e.target.value)} placeholder="Ej: pasajes desde media guardia" />
+        </Field>
+      </FieldGroup>
 
-            {techniques && techniques.length > 0 && (
-              <Field>
-                <FieldLabel>Técnicas practicadas</FieldLabel>
-                <ToggleGroup multiple variant="outline" value={techniqueIds.map(String)} onValueChange={(v) => setTechniqueIds(v.map(Number))} className="flex-wrap justify-start">
-                  {techniques.map((t) => (
-                    <ToggleGroupItem key={t.id} value={String(t.id)} disabled={t.id === undefined}>
-                      {t.name}
-                    </ToggleGroupItem>
-                  ))}
-                </ToggleGroup>
-              </Field>
-            )}
-          </FieldGroup>
-        </CardContent>
-      </Card>
+      <div className="flex flex-col gap-4">
+        <h2 className="text-title">Técnicas</h2>
+        {selectedTechniques.length > 0 && (
+          <ToggleGroup
+            multiple
+            variant="outline"
+            value={techniqueIds.map(String)}
+            onValueChange={(v) => setTechniqueIds(v.map(Number))}
+            className="flex-wrap justify-start"
+          >
+            {selectedTechniques.map((t) => (
+              <ToggleGroupItem key={t.id} value={String(t.id)}>
+                {t.name}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        )}
+        <Input
+          value={techniqueQuery}
+          onChange={(e) => setTechniqueQuery(e.target.value)}
+          placeholder="Buscar técnica para agregar…"
+          aria-label="Buscar técnica para agregar"
+        />
+        {techniqueMatches.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {techniqueMatches.map((t) => (
+              <Button
+                key={t.id}
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (t.id === undefined) return;
+                  setTechniqueIds((prev) => [...prev, t.id as number]);
+                  setTechniqueQuery("");
+                }}
+              >
+                {t.name}
+              </Button>
+            ))}
+          </div>
+        )}
+      </div>
 
       <EvidenceEditor value={evidence.filter(e => techniqueIds.includes(e.techniqueId))} onChange={setEvidence} techniques={techniques ?? []} />
 
-      <Card>
-        <CardContent className="flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <FieldLabel>Rolls</FieldLabel>
-            <Button variant="secondary" size="sm" type="button" onClick={() => setRolls((prev) => [...prev, emptyRoll()])}>
-              Agregar roll
-            </Button>
-          </div>
+      <div className="flex flex-col gap-4">
+        <h2 className="text-title">Rolls</h2>
 
-          {rolls.length === 0 && <FieldDescription>Sin rolls.</FieldDescription>}
+        {rolls.length === 0 && <p className="text-muted-foreground">Sin rolls.</p>}
 
-          {rolls.map((roll, i) => (
-            <Card key={i} size="sm" className="bg-surface ring-0">
-              <CardContent className="flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-foreground">Roll {i + 1}</span>
-                  <Button variant="ghost" size="sm" type="button" onClick={() => removeRoll(i)}>
-                    <X data-icon="inline-start" />
-                    Quitar
-                  </Button>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <Field>
-                    <FieldLabel htmlFor={`roll-partner-${i}`}>Compañero</FieldLabel>
-                    <Input
-                      id={`roll-partner-${i}`}
-                      value={roll.partnerName ?? ""}
-                      onChange={(e) => updateRoll(i, { partnerName: e.target.value })}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor={`roll-belt-${i}`}>Cinturón</FieldLabel>
-                    <Select
-                      items={BELT_ITEMS}
-                      value={roll.partnerBelt ?? ""}
-                      onValueChange={(v) => updateRoll(i, { partnerBelt: ((v as string) || undefined) as Roll["partnerBelt"] })}
-                    >
-                      <SelectTrigger id={`roll-belt-${i}`} className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">{BELT_ITEMS[""]}</SelectItem>
-                        {BELTS.map((b) => (
-                          <SelectItem key={b} value={b}>
-                            {BELT_LABELS[b]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor={`roll-outcome-${i}`}>Resultado</FieldLabel>
-                    <Select items={OUTCOME_LABELS} value={roll.outcome} onValueChange={(v) => updateRoll(i, { outcome: v as RollOutcome })}>
-                      <SelectTrigger id={`roll-outcome-${i}`} className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {OUTCOMES.map((o) => (
-                          <SelectItem key={o} value={o}>
-                            {OUTCOME_LABELS[o]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor={`roll-stuck-${i}`}>Dónde te costó</FieldLabel>
-                    <Select
-                      items={STUCK_ITEMS}
-                      value={roll.stuckIn ?? ""}
-                      onValueChange={(v) => updateRoll(i, { stuckIn: ((v as string) || undefined) as Position | undefined })}
-                    >
-                      <SelectTrigger id={`roll-stuck-${i}`} className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">{STUCK_ITEMS[""]}</SelectItem>
-                        {POSITIONS.map((p) => (
-                          <SelectItem key={p} value={p}>
-                            {POSITION_LABELS[p]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                </div>
+        {rolls.map((roll, i) => (
+          <Disclosure
+            key={i}
+            className="rounded-2xl bg-surface px-4 py-0.5 open:pb-4"
+            defaultOpen={openRollIndex === i}
+            summary={`Roll ${i + 1} · ${roll.partnerName || "Sin nombre"} · ${label(OUTCOME_LABELS, roll.outcome)}`}
+          >
+            <div className="flex flex-col gap-3">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <Field>
-                  <FieldLabel htmlFor={`roll-notes-${i}`}>Notas</FieldLabel>
-                  <Textarea
-                    id={`roll-notes-${i}`}
-                    value={roll.notes ?? ""}
-                    onChange={(e) => updateRoll(i, { notes: e.target.value })}
+                  <FieldLabel htmlFor={`roll-partner-${i}`}>Compañero</FieldLabel>
+                  <Input
+                    id={`roll-partner-${i}`}
+                    value={roll.partnerName ?? ""}
+                    onChange={(e) => updateRoll(i, { partnerName: e.target.value })}
                   />
                 </Field>
-              </CardContent>
-            </Card>
-          ))}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent>
-          <FieldGroup>
-            <div className="flex flex-col gap-5 md:flex-row">
-              <Field className="md:flex-1">
-                <FieldLabel htmlFor="whatWorked">Qué funcionó</FieldLabel>
-                <Textarea id="whatWorked" value={whatWorked} onChange={(e) => setWhatWorked(e.target.value)} />
+                <Field>
+                  <FieldLabel htmlFor={`roll-belt-${i}`}>Cinturón</FieldLabel>
+                  <Select
+                    items={BELT_ITEMS}
+                    value={roll.partnerBelt ?? ""}
+                    onValueChange={(v) => updateRoll(i, { partnerBelt: ((v as string) || undefined) as Roll["partnerBelt"] })}
+                  >
+                    <SelectTrigger id={`roll-belt-${i}`} className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">{BELT_ITEMS[""]}</SelectItem>
+                      {BELTS.map((b) => (
+                        <SelectItem key={b} value={b}>
+                          {BELT_LABELS[b]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor={`roll-outcome-${i}`}>Resultado</FieldLabel>
+                  <Select items={OUTCOME_LABELS} value={roll.outcome} onValueChange={(v) => updateRoll(i, { outcome: v as RollOutcome })}>
+                    <SelectTrigger id={`roll-outcome-${i}`} className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {OUTCOMES.map((o) => (
+                        <SelectItem key={o} value={o}>
+                          {OUTCOME_LABELS[o]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor={`roll-stuck-${i}`}>Dónde te costó</FieldLabel>
+                  <Select
+                    items={STUCK_ITEMS}
+                    value={roll.stuckIn ?? ""}
+                    onValueChange={(v) => updateRoll(i, { stuckIn: ((v as string) || undefined) as Position | undefined })}
+                  >
+                    <SelectTrigger id={`roll-stuck-${i}`} className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">{STUCK_ITEMS[""]}</SelectItem>
+                      {POSITIONS.map((p) => (
+                        <SelectItem key={p} value={p}>
+                          {POSITION_LABELS[p]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
+              <Field>
+                <FieldLabel htmlFor={`roll-notes-${i}`}>Notas</FieldLabel>
+                <Textarea
+                  id={`roll-notes-${i}`}
+                  value={roll.notes ?? ""}
+                  onChange={(e) => updateRoll(i, { notes: e.target.value })}
+                />
               </Field>
-              <Field className="md:flex-1">
-                <FieldLabel htmlFor="whatFailed">Qué te costó</FieldLabel>
-                <Textarea id="whatFailed" value={whatFailed} onChange={(e) => setWhatFailed(e.target.value)} />
-              </Field>
+              <Button variant="ghost" size="sm" className="self-start" type="button" onClick={() => removeRoll(i)}>
+                <X data-icon="inline-start" />
+                Quitar roll
+              </Button>
             </div>
-            <Field>
-              <FieldLabel htmlFor="nextFocus">Foco para la próxima clase</FieldLabel>
-              <Textarea id="nextFocus" value={nextFocus} onChange={(e) => setNextFocus(e.target.value)} />
+          </Disclosure>
+        ))}
+
+        <Button variant="outline" size="sm" type="button" className="self-start" onClick={addRoll}>
+          Agregar roll
+        </Button>
+      </div>
+
+      <div className="flex flex-col gap-4">
+        <h2 className="text-title">Reflexión</h2>
+        <FieldGroup>
+          <div className="flex flex-col gap-5 md:flex-row">
+            <Field className="md:flex-1">
+              <FieldLabel htmlFor="whatWorked">Qué funcionó</FieldLabel>
+              <Textarea id="whatWorked" value={whatWorked} onChange={(e) => setWhatWorked(e.target.value)} />
             </Field>
+            <Field className="md:flex-1">
+              <FieldLabel htmlFor="whatFailed">Qué te costó</FieldLabel>
+              <Textarea id="whatFailed" value={whatFailed} onChange={(e) => setWhatFailed(e.target.value)} />
+            </Field>
+          </div>
+          <Field>
+            <FieldLabel htmlFor="nextFocus">Foco para la próxima clase</FieldLabel>
+            <Textarea id="nextFocus" value={nextFocus} onChange={(e) => setNextFocus(e.target.value)} />
+          </Field>
+          <Disclosure summary="Objetivo" defaultOpen={Boolean(goalNotes)}>
             <Field>
               <FieldLabel htmlFor="goal-notes">Qué pasó con tu objetivo</FieldLabel>
               <Textarea id="goal-notes" value={goalNotes} onChange={(e) => setGoalNotes(e.target.value)} />
             </Field>
-          </FieldGroup>
-        </CardContent>
-      </Card>
+          </Disclosure>
+        </FieldGroup>
+      </div>
 
       {saveError && (
         <Alert variant="destructive">

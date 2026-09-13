@@ -4,7 +4,7 @@ import type { Technique } from "@/lib/types";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Disclosure } from "@/components/app/disclosure";
 export function EvidenceEditor({
   value,
   onChange,
@@ -16,20 +16,25 @@ export function EvidenceEditor({
 }) {
   if (!value.length) return null;
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Detalle por técnica</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-5">
-        {value.map((e, i) => {
-          const patch = (p: Partial<TechniqueEvidence>) =>
-            onChange(value.map((x, j) => (i === j ? { ...x, ...p } : x)));
-          return (
-            <FieldGroup key={i}>
-              <p className="text-title">
-                {techniques.find((t) => t.id === e.techniqueId)?.name ??
-                  "Técnica"}
-              </p>
+    <div className="flex flex-col gap-4">
+      <h2 className="text-title">Detalle por técnica</h2>
+      {value.map((e, i) => {
+        const patch = (p: Partial<TechniqueEvidence>) =>
+          onChange(value.map((x, j) => (i === j ? { ...x, ...p } : x)));
+        const name =
+          techniques.find((t) => t.id === e.techniqueId)?.name ?? "Técnica";
+        return (
+          <Disclosure
+            key={i}
+            className="rounded-2xl bg-surface px-4 py-0.5 open:pb-4"
+            summary={
+              <span className="flex flex-1 flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span className="font-medium text-foreground">{name}</span>
+                <span>· {STAGE_LABELS[e.stage]}</span>
+              </span>
+            }
+          >
+            <FieldGroup>
               <Field>
                 <FieldLabel htmlFor={`evidence-stage-${i}`}>
                   Experiencia
@@ -83,9 +88,9 @@ export function EvidenceEditor({
                 />
               </Field>
             </FieldGroup>
-          );
-        })}
-      </CardContent>
-    </Card>
+          </Disclosure>
+        );
+      })}
+    </div>
   );
 }

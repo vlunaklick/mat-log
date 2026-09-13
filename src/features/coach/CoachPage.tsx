@@ -6,13 +6,18 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
+import { History, SquarePen } from "lucide-react";
 import { api } from "@/lib/api";
 import { formatTimestamp, todayISO } from "@/lib/date";
 import type { Conversation, Draft } from "@/lib/training";
-import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Composer } from "./Composer";
 import {
   useConversations,
@@ -33,65 +38,106 @@ const SUGGESTIONS = [
 export default function CoachPage() {
   const { id } = useParams();
   const [params] = useSearchParams();
-  const [query, setQuery] = useState("");
-  const conversations = useConversations(useDeferredValue(query));
-  const current = id && conversations.data?.find((c) => c.id === id);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  // Only the current title is needed on the canvas; the full list lives in the history sheet.
+  const conversations = useConversations("");
+  const current = id ? conversations.data?.find((c) => c.id === id) : undefined;
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader
-        title="Coach"
-        lead={current ? current.title : undefined}
-        back={id ? { to: "/coach", label: "Conversaciones" } : undefined}
-        action={
-          id && (
+      <header className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-col">
+          <h1 className="text-h2 md:text-h1">Coach</h1>
+          {current && (
+            <p className="truncate text-sm text-muted-foreground">
+              {current.title}
+            </p>
+          )}
+        </div>
+        <div className="flex shrink-0 gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Historial de conversaciones"
+            onClick={() => setHistoryOpen(true)}
+          >
+            <History />
+          </Button>
+          {id && (
             <Button
-              variant="outline"
+              variant="ghost"
+              size="icon"
+              aria-label="Nueva conversación"
               nativeButton={false}
               render={<Link to="/coach" />}
             >
-              Nueva conversación
+              <SquarePen />
             </Button>
-          )
-        }
-      />
-      <ConversationView key={id ?? params.get("new") ?? "new"} id={id} />
-      {!id && (query || !!conversations.data?.length) && (
-        <section className="flex flex-col gap-3">
-          <h2 className="text-title">Conversaciones</h2>
-          <Input
-            aria-label="Buscar en tus conversaciones"
-            placeholder="Buscar…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <ErrorNotice error={conversations.error} />
-          {conversations.isPending ? (
-            <Loading />
-          ) : conversations.data?.length ? (
-            <div className="flex flex-col">
-              {conversations.data.map((c) => (
-                <Link
-                  key={c.id}
-                  to={`/coach/${c.id}`}
-                  className="flex items-center justify-between gap-3 rounded-2xl p-3 hover:bg-surface"
-                >
-                  <span className="truncate">{c.title}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {formatTimestamp(c.updatedAt)}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              No hay conversaciones que coincidan.
-            </p>
           )}
-        </section>
-      )}
+        </div>
+      </header>
+      <ConversationView key={id ?? params.get("new") ?? "new"} id={id} />
+      <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
+        <SheetContent className="w-full gap-0 sm:max-w-md">
+          {historyOpen && (
+            <HistoryList activeId={id} onPick={() => setHistoryOpen(false)} />
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
+
+function HistoryList({
+  activeId,
+  onPick,
+}: {
+  activeId?: string;
+  onPick: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const conversations = useConversations(useDeferredValue(query));
+  return (
+    <>
+      <SheetHeader className="pr-14">
+        <SheetTitle className="text-title">Conversaciones</SheetTitle>
+      </SheetHeader>
+      <div className="px-4 pb-3">
+        <Input
+          aria-label="Buscar en tus conversaciones"
+          placeholder="Buscar…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pb-4">
+        <ErrorNotice error={conversations.error} />
+        {conversations.isPending ? (
+          <Loading />
+        ) : conversations.data?.length ? (
+          conversations.data.map((c) => (
+            <Link
+              key={c.id}
+              to={`/coach/${c.id}`}
+              onClick={onPick}
+              aria-current={c.id === activeId ? "page" : undefined}
+              className="flex min-h-12 flex-col justify-center rounded-2xl px-3 py-2 transition-colors hover:bg-surface aria-[current=page]:bg-surface"
+            >
+              <span className="truncate text-sm">{c.title}</span>
+              <span className="text-xs text-muted-foreground">
+                {formatTimestamp(c.updatedAt)}
+              </span>
+            </Link>
+          ))
+        ) : (
+          <p className="px-3 py-2 text-sm text-muted-foreground">
+            {query ? "Nada coincide." : "Todavía no hay conversaciones."}
+          </p>
+        )}
+      </div>
+    </>
+  );
+}
+
 function ConversationView({ id }: { id?: string }) {
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -161,7 +207,8 @@ function ConversationView({ id }: { id?: string }) {
                   : "¿En qué te ayudo?"
           }
           action={
-            mode === "chat" && (
+            mode === "chat" &&
+            !input && (
               <div className="flex flex-wrap justify-center gap-2">
                 {SUGGESTIONS.map((text) => (
                   <Button
@@ -177,26 +224,23 @@ function ConversationView({ id }: { id?: string }) {
             )
           }
         >
-          {mode === "log" &&
-            "Hablá o escribí. Armo un borrador y te pregunto lo que falte."}
+          {mode === "log" && "Hablá o escribí. Te pregunto lo que falte."}
         </Blank>
       )}
       {createdId && messages.isPending && <Loading />}
-      <div className="flex flex-col gap-4" aria-live="polite">
+      <div className="flex flex-col gap-3" aria-live="polite">
         {messages.data?.map((m) => (
           <div
             key={m.id}
+            title={formatTimestamp(m.createdAt)}
             className={
               m.role === "user"
-                ? "ml-auto max-w-[90%] rounded-3xl rounded-br-md bg-primary p-4 text-primary-foreground"
-                : "mr-auto max-w-full rounded-3xl bg-surface p-4"
+                ? "ml-auto max-w-[85%] rounded-3xl rounded-br-md bg-primary px-4 py-3 text-primary-foreground"
+                : "mr-auto max-w-full rounded-3xl bg-surface px-4 py-3"
             }
           >
             <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
               {m.content}
-            </p>
-            <p className="mt-2 text-xs opacity-60">
-              {formatTimestamp(m.createdAt)}
             </p>
           </div>
         ))}
@@ -208,41 +252,54 @@ function ConversationView({ id }: { id?: string }) {
         .map((p) => (
           <ProposalCard key={p.id} proposal={p} />
         ))}
-      {pendingDrafts.length > 0 && (
-        <div className="flex flex-col gap-3">
-          {pendingDrafts.map((d) => (
-            <div
-              key={d.id}
-              className="flex flex-wrap items-center gap-2 rounded-2xl bg-surface p-3"
+      {pendingDrafts.map((d) => (
+        <div
+          key={d.id}
+          className="flex flex-col gap-3 rounded-3xl bg-surface p-4"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Link
+              className="min-w-0 truncate font-medium underline-offset-4 hover:underline"
+              to={`/drafts/${d.id}`}
             >
-              <Badge variant="outline">Borrador</Badge>
-              <Link className="text-sm underline" to={`/drafts/${d.id}`}>
-                {d.data.classTopic || "Clase por completar"}
-              </Link>
-              <Button
-                size="sm"
-                variant={d.id === draftId ? "secondary" : "outline"}
-                onClick={() => setDraftId(d.id)}
-              >
-                {d.id === draftId ? "Respondiendo preguntas" : "Continuar acá"}
-              </Button>
-            </div>
-          ))}
+              {d.data.classTopic || "Clase por completar"}
+            </Link>
+            <Button
+              size="sm"
+              nativeButton={false}
+              render={<Link to={`/drafts/${d.id}`} />}
+            >
+              Revisar borrador
+            </Button>
+          </div>
+          {d.id === draftId && d.questions.length > 0 && (
+            <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-muted-foreground">
+              {d.questions.map((q, i) => (
+                <li key={i}>{q}</li>
+              ))}
+            </ul>
+          )}
+          {d.id === draftId ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="self-start"
+              onClick={() => setDraftId(null)}
+            >
+              Hablar de otra cosa
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="self-start"
+              onClick={() => setDraftId(d.id)}
+            >
+              Responder preguntas acá
+            </Button>
+          )}
         </div>
-      )}
-      {selected && (
-        <div className="flex flex-col gap-2">
-          <p className="text-label">Preguntas pendientes</p>
-          {selected.questions.map((q, i) => (
-            <p className="text-sm" key={i}>
-              {q}
-            </p>
-          ))}
-          <Button variant="ghost" size="sm" onClick={() => setDraftId(null)}>
-            Hablar de otra cosa
-          </Button>
-        </div>
-      )}
+      ))}
       <ErrorNotice error={send.error} />
       <Composer
         value={input}
@@ -259,7 +316,7 @@ function ConversationView({ id }: { id?: string }) {
           selected
             ? "Respondé lo que recuerdes…"
             : mode === "log"
-              ? "Hoy practicamos… Me costó… Quiero trabajar…"
+              ? "Hoy practicamos… Me costó…"
               : "Escribí o grabá un audio…"
         }
       />
