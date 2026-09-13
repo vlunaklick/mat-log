@@ -1,14 +1,17 @@
 import { useRef, useState } from "react";
-import { useLiveQuery } from "dexie-react-hooks";
 import { toast } from "sonner";
-import { db, DEFAULT_SETTINGS, exportAll, importAll, saveSettings } from "@/lib/db";
+import { useQueryClient } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import { authClient } from "@/lib/auth-client";
+import { useSettings, useUpdateSettings } from "@/lib/queries";
 import type { Settings } from "@/lib/types";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,11 +21,12 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
 function SettingsForm({ initial }: { initial: Settings }) {
-  const [apiKey, setApiKey] = useState(initial.geminiApiKey ?? "");
+  const queryClient = useQueryClient();
+  const updateSettings = useUpdateSettings();
+
   const [beltStartDate, setBeltStartDate] = useState(initial.beltStartDate ?? "");
   const [weeklyGoalSessions, setWeeklyGoalSessions] = useState(initial.weeklyGoalSessions);
   const [importing, setImporting] = useState(false);
@@ -31,8 +35,7 @@ function SettingsForm({ initial }: { initial: Settings }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function handleSave() {
-    await saveSettings({
-      geminiApiKey: apiKey || undefined,
+    await updateSettings.mutateAsync({
       beltStartDate: beltStartDate || undefined,
       weeklyGoalSessions: Math.min(7, Math.max(1, weeklyGoalSessions)),
     });
@@ -40,8 +43,8 @@ function SettingsForm({ initial }: { initial: Settings }) {
   }
 
   async function handleExport() {
-    const json = await exportAll();
-    const blob = new Blob([json], { type: "application/json" });
+    const data = await api.get<unknown>("/api/export");
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     const date = new Date().toISOString().slice(0, 10);
@@ -71,7 +74,9 @@ function SettingsForm({ initial }: { initial: Settings }) {
     setImporting(true);
     try {
       const text = await file.text();
-      await importAll(text);
+      const data = JSON.parse(text);
+      await api.post<void>("/api/import", data);
+      await queryClient.invalidateQueries();
       toast("Backup imported");
     } catch (err) {
       setImportError(err instanceof Error ? err.message : String(err));
@@ -80,42 +85,14 @@ function SettingsForm({ initial }: { initial: Settings }) {
     }
   }
 
-  async function handleDeleteAll() {
-    await db.delete();
-    location.reload();
+  async function handleSignOut() {
+    await authClient.signOut();
+    queryClient.clear();
   }
 
   return (
     <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6">
-      <PageHeader title="Settings." lead="Configure the coach, your training goals, and your data." />
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Coach</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="gemini-api-key">Google AI Studio API key</FieldLabel>
-              <Input
-                id="gemini-api-key"
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="AIza..."
-                autoComplete="off"
-              />
-              <FieldDescription>
-                Stored only in this browser and sent only to Google when you use the Coach. Get a key at{" "}
-                <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">
-                  aistudio.google.com/apikey
-                </a>
-                .
-              </FieldDescription>
-            </Field>
-          </FieldGroup>
-        </CardContent>
-      </Card>
+      <PageHeader title="Settings." lead="Configure your training goals and your data." />
 
       <Card>
         <CardHeader>
@@ -143,8 +120,18 @@ function SettingsForm({ initial }: { initial: Settings }) {
       </Card>
 
       <div>
-        <Button onClick={handleSave}>Save</Button>
+        <Button onClick={handleSave} disabled={updateSettings.isPending}>
+          {updateSettings.isPending ? "Saving…" : "Save"}
+        </Button>
       </div>
+
+      {updateSettings.isError && (
+        <Alert variant="destructive">
+          <AlertDescription>
+            {updateSettings.error instanceof Error ? updateSettings.error.message : "Could not save settings."}
+          </AlertDescription>
+        </Alert>
+      )}
 
       <Card>
         <CardHeader>
@@ -187,42 +174,33 @@ function SettingsForm({ initial }: { initial: Settings }) {
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
-
-            <div className="flex flex-col gap-2 border-t border-border-soft pt-4">
-              <p className="text-label text-muted-foreground">Danger zone</p>
-              <AlertDialog>
-                <AlertDialogTrigger render={<Button variant="destructive" className="w-fit" />}>
-                  Delete all data
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete all data?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This permanently deletes every session, technique, and setting. This cannot be undone.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction variant="destructive" onClick={handleDeleteAll}>
-                      Delete everything
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
           </div>
         </CardContent>
       </Card>
 
-      <p className="text-center text-xs text-text-faint">Mat Log · local-only · v0.1</p>
+      <Button variant="outline" onClick={handleSignOut}>
+        Sign out
+      </Button>
+
+      <p className="text-center text-xs text-text-faint">Mat Log · v0.1</p>
     </div>
   );
 }
 
 export default function SettingsPage() {
-  const initial =
-    useLiveQuery(() => db.settings.get("settings").then((s) => s ?? DEFAULT_SETTINGS), []) ?? DEFAULT_SETTINGS;
-  const formKey = `${initial.geminiApiKey ?? ""}|${initial.beltStartDate ?? ""}|${initial.weeklyGoalSessions}`;
+  const { data: settings, isPending } = useSettings();
 
-  return <SettingsForm key={formKey} initial={initial} />;
+  if (isPending || !settings) {
+    return (
+      <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6">
+        <PageHeader title="Settings." lead="Configure your training goals and your data." />
+        <Skeleton className="h-48 rounded-3xl" />
+        <Skeleton className="h-32 rounded-3xl" />
+      </div>
+    );
+  }
+
+  const formKey = `${settings.beltStartDate ?? ""}|${settings.weeklyGoalSessions}`;
+
+  return <SettingsForm key={formKey} initial={settings} />;
 }
