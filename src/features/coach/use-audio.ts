@@ -197,6 +197,7 @@ export function useAudio(onText: (text: string) => void) {
     busy,
     error,
     live,
+    dictation: !!getDictation(),
     start,
     stop,
     transcribe,

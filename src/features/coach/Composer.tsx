@@ -34,6 +34,9 @@ export function Composer({
         : busy
           ? "Pensando…"
           : null;
+  const micHint = !audio.dictation
+    ? "Graba y transcribe al terminar"
+    : "Dictado en vivo";
   return (
     <div className="flex flex-col gap-2 rounded-3xl bg-surface p-2">
       <Field>
@@ -60,7 +63,7 @@ export function Composer({
         <Button
           variant={audio.recording ? "default" : "ghost"}
           size={audio.recording ? "default" : "icon"}
-          aria-label={audio.recording ? "Terminar audio" : "Grabar audio"}
+          aria-label={audio.recording ? "Terminar audio" : micHint}
           onClick={audio.recording ? audio.stop : audio.start}
           disabled={busy || audio.busy}
         >
@@ -91,6 +94,7 @@ export function Composer({
           </Button>
         )}
         <p
+          title={micHint}
           className={
             status
               ? "min-w-0 flex-1 truncate px-2 text-xs text-muted-foreground"
