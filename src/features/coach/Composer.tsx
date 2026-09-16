@@ -24,6 +24,16 @@ export function Composer({
   );
   const locked = busy || audio.busy || audio.recording;
   const canSend = !!value.trim() && !locked;
+  const status =
+    audio.recording
+      ? audio.live
+        ? audio.live
+        : "Escuchando…"
+      : audio.busy
+        ? "Transcribiendo…"
+        : busy
+          ? "Pensando…"
+          : null;
   return (
     <div className="flex flex-col gap-2 rounded-3xl bg-surface p-2">
       <Field>
@@ -82,19 +92,13 @@ export function Composer({
         )}
         <p
           className={
-            audio.recording || audio.busy || busy
+            status
               ? "min-w-0 flex-1 truncate px-2 text-xs text-muted-foreground"
               : "sr-only"
           }
           aria-live="polite"
         >
-          {audio.recording
-            ? "Grabando, hasta 5 minutos"
-            : audio.busy
-              ? "Transcribiendo…"
-              : busy
-                ? "Pensando…"
-                : null}
+          {status}
         </p>
         <Button
           className="ml-auto"

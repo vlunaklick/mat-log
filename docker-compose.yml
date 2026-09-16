@@ -28,7 +28,7 @@ services:
       GOOGLE_GENERATIVE_AI_API_KEY: ${GOOGLE_GENERATIVE_AI_API_KEY}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       COACH_MODEL: ${COACH_MODEL:-gemini-3.5-flash}
-      AUDIO_MODEL: ${AUDIO_MODEL:-gemini-2.5-flash}
+      AUDIO_MODEL: ${AUDIO_MODEL:-gemini-3.6-flash}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
       NODE_ENV: production
       PORT: "3000"

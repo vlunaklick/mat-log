@@ -63,7 +63,11 @@ export function createAudioRoute(modelOverride?: LanguageModel) {
       if (!text.trim())
         return c.json({ error: "No se pudo reconocer voz en el audio. Probá grabar de nuevo." }, 422);
       return c.json({ text: text.trim() });
-    } catch {
+    } catch (error) {
+      console.error(
+        "Audio transcription failed:",
+        error instanceof Error ? error.message : "Unknown provider error",
+      );
       return c.json(
         {
           error:
