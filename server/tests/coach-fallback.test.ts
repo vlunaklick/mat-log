@@ -85,6 +85,35 @@ test("invalid fallback output is rejected by the real Coach schema", async () =>
   }, primary, router), /response did not match schema/);
 });
 
+for (const content of ["not JSON", JSON.stringify({ ...reply, reply: "" })]) {
+  test(`invalid Gemini output falls back once: ${content}`, async () => {
+    let googleCalls = 0, routerCalls = 0;
+    const google = createGoogleGenerativeAI({ apiKey: "test", fetch: async () => {
+      googleCalls++;
+      return Response.json({
+        candidates: [{ content: { role: "model", parts: [{ text: content }] }, finishReason: "STOP" }],
+      });
+    } })("gemini-3.5-flash");
+    const router = createFreeCoachFallback("test", async () => {
+      routerCalls++;
+      return Response.json({
+        id: "test", object: "chat.completion", created: 1, model: "free-model",
+        choices: [{ index: 0, finish_reason: "stop", message: { role: "assistant", content: JSON.stringify(reply) } }],
+      });
+    });
+    const result = await withCoachFallback(async (model, abortSignal) => {
+      const result = await generateText({
+        model, abortSignal, maxRetries: 0,
+        output: Output.object({ schema: coachGenerationSchema }), prompt: "Hola coach",
+      });
+      return result.output;
+    }, google, router);
+    assert.deepEqual(result, reply);
+    assert.equal(googleCalls, 1);
+    assert.equal(routerCalls, 1);
+  });
+}
+
 test("actual Gemini 429 falls back to free OpenRouter with tools and validated output", async () => {
   let googleCalls = 0, routerCalls = 0, toolCalls = 0;
   const google = createGoogleGenerativeAI({ apiKey: "test", fetch: async () => {

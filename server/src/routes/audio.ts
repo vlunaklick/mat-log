@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { generateText } from "ai";
+import { generateText, type LanguageModel } from "ai";
 import { env } from "../env.ts";
 import type { AppEnv } from "../middleware.ts";
 export const AUDIO_MAX_BYTES = 15 * 1024 * 1024;
@@ -13,7 +13,8 @@ export const AUDIO_TYPES = new Set([
   "audio/ogg",
   "audio/x-m4a",
 ]);
-export const audioRoute = new Hono<AppEnv>()
+export function createAudioRoute(modelOverride?: LanguageModel) {
+  return new Hono<AppEnv>()
   .use(
     "*",
     bodyLimit({
@@ -36,9 +37,9 @@ export const audioRoute = new Hono<AppEnv>()
       );
     try {
       const { text } = await generateText({
-        model: createGoogleGenerativeAI({
+        model: modelOverride ?? createGoogleGenerativeAI({
           apiKey: env.GOOGLE_GENERATIVE_AI_API_KEY,
-        })(env.COACH_MODEL),
+        })(env.AUDIO_MODEL),
         abortSignal: AbortSignal.timeout(90000),
         maxRetries: 1,
         maxOutputTokens: 6000,
@@ -59,7 +60,9 @@ export const audioRoute = new Hono<AppEnv>()
           },
         ],
       });
-      return c.json({ text });
+      if (!text.trim())
+        return c.json({ error: "No se pudo reconocer voz en el audio. Probá grabar de nuevo." }, 422);
+      return c.json({ text: text.trim() });
     } catch {
       return c.json(
         {
@@ -70,3 +73,5 @@ export const audioRoute = new Hono<AppEnv>()
       );
     }
   });
+}
+export const audioRoute = createAudioRoute();

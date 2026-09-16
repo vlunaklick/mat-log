@@ -1,4 +1,9 @@
-import { APICallError, RetryError, type LanguageModel } from "ai";
+import {
+  APICallError,
+  NoObjectGeneratedError,
+  RetryError,
+  type LanguageModel,
+} from "ai";
 import { createOpenRouter, type OpenRouterProviderSettings } from "@openrouter/ai-sdk-provider";
 
 export function createFreeCoachFallback(
@@ -14,6 +19,7 @@ export function createFreeCoachFallback(
 
 function isTransientProviderError(error: unknown): boolean {
   if (RetryError.isInstance(error)) return isTransientProviderError(error.lastError);
+  if (NoObjectGeneratedError.isInstance(error)) return true;
   if (APICallError.isInstance(error)) {
     return error.statusCode === 408 || error.statusCode === 429 ||
       (error.statusCode != null && error.statusCode >= 500) ||

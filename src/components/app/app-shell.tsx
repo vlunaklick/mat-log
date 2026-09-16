@@ -45,8 +45,9 @@ function Wordmark() {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
+  const isCoach = pathname === "/coach" || pathname.startsWith("/coach/");
   return (
-    <SidebarProvider>
+    <SidebarProvider className={isCoach ? "h-dvh min-h-0 overflow-hidden" : undefined}>
       <Sidebar collapsible="icon" className="hidden md:flex">
         <SidebarHeader className="py-4">
           <Wordmark />
@@ -78,8 +79,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           </SidebarMenu>
         </SidebarFooter>
       </Sidebar>
-      <SidebarInset className="bg-background">
-        <main className="mx-auto w-full max-w-4xl px-4 pt-4 pb-28 md:px-8 md:pt-10 md:pb-16">{children}</main>
+      <SidebarInset className={cn("bg-background", isCoach && "min-h-0 min-w-0")}>
+        <main className={cn("mx-auto w-full max-w-4xl px-4 pt-4 md:px-8 md:pt-10", isCoach ? "flex min-h-0 flex-1 flex-col pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-4" : "pb-28 md:pb-16")}>{children}</main>
         <MobileNav pathname={pathname} />
       </SidebarInset>
     </SidebarProvider>

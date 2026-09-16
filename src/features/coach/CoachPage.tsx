@@ -18,6 +18,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Disclosure } from "@/components/app/disclosure";
 import { Composer } from "./Composer";
 import {
   useConversations,
@@ -43,8 +44,8 @@ export default function CoachPage() {
   const conversations = useConversations("");
   const current = id ? conversations.data?.find((c) => c.id === id) : undefined;
   return (
-    <div className="flex flex-col gap-6">
-      <header className="flex items-center justify-between gap-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
+      <header className="flex shrink-0 items-center justify-between gap-3">
         <div className="flex min-w-0 flex-col">
           <h1 className="text-h2 md:text-h1">Coach</h1>
           {current && (
@@ -193,133 +194,145 @@ function ConversationView({ id }: { id?: string }) {
     ) ?? [];
   const selected = pendingDrafts.find((d) => d.id === draftId);
   return (
-    <div className="flex flex-col gap-5">
-      <ErrorNotice error={messages.error ?? drafts.error ?? proposals.error} />
-      {!createdId && (
-        <Blank
-          title={
-            mode === "log"
-              ? "Contame la clase"
-              : mode === "profile"
-                ? "Contame tu recorrido"
-                : mode === "gameplan"
-                  ? "Pensemos tu juego"
-                  : "¿En qué te ayudo?"
-          }
-          action={
-            mode === "chat" &&
-            !input && (
-              <div className="flex flex-wrap justify-center gap-2">
-                {SUGGESTIONS.map((text) => (
-                  <Button
-                    key={text}
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setInput(text)}
-                  >
-                    {text}
-                  </Button>
-                ))}
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <div
+        role="region"
+        aria-label="Conversación con el coach"
+        tabIndex={0}
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1"
+      >
+        <div className="flex flex-col gap-4 pb-2">
+          <ErrorNotice
+            error={messages.error ?? drafts.error ?? proposals.error}
+          />
+          {!createdId && (
+            <Blank
+              title={
+                mode === "log"
+                  ? "Contame la clase"
+                  : mode === "profile"
+                    ? "Contame tu recorrido"
+                    : mode === "gameplan"
+                      ? "Pensemos tu juego"
+                      : "¿En qué te ayudo?"
+              }
+              action={
+                mode === "chat" &&
+                !input && (
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {SUGGESTIONS.map((text) => (
+                      <Button
+                        key={text}
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setInput(text)}
+                      >
+                        {text}
+                      </Button>
+                    ))}
+                  </div>
+                )
+              }
+            >
+              {mode === "log" && "Hablá o escribí. Te pregunto lo que falte."}
+            </Blank>
+          )}
+          {createdId && messages.isPending && <Loading />}
+          <div className="flex flex-col gap-3" aria-live="polite">
+            {messages.data?.map((m) => (
+              <div
+                key={m.id}
+                title={formatTimestamp(m.createdAt)}
+                className={
+                  m.role === "user"
+                    ? "ml-auto max-w-[85%] rounded-3xl rounded-br-md bg-primary px-4 py-3 text-primary-foreground"
+                    : "mr-auto max-w-full rounded-3xl bg-surface px-4 py-3"
+                }
+              >
+                <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                  {m.content}
+                </p>
               </div>
+            ))}
+          </div>
+          {proposals.data
+            ?.filter(
+              (p) => p.conversationId === createdId && p.status === "pending",
             )
-          }
-        >
-          {mode === "log" && "Hablá o escribí. Te pregunto lo que falte."}
-        </Blank>
-      )}
-      {createdId && messages.isPending && <Loading />}
-      <div className="flex flex-col gap-3" aria-live="polite">
-        {messages.data?.map((m) => (
-          <div
-            key={m.id}
-            title={formatTimestamp(m.createdAt)}
-            className={
-              m.role === "user"
-                ? "ml-auto max-w-[85%] rounded-3xl rounded-br-md bg-primary px-4 py-3 text-primary-foreground"
-                : "mr-auto max-w-full rounded-3xl bg-surface px-4 py-3"
-            }
-          >
-            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-              {m.content}
-            </p>
-          </div>
-        ))}
-      </div>
-      {proposals.data
-        ?.filter(
-          (p) => p.conversationId === createdId && p.status === "pending",
-        )
-        .map((p) => (
-          <ProposalCard key={p.id} proposal={p} />
-        ))}
-      {pendingDrafts.map((d) => (
-        <div
-          key={d.id}
-          className="flex flex-col gap-3 rounded-3xl bg-surface p-4"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <Link
-              className="min-w-0 truncate font-medium underline-offset-4 hover:underline"
-              to={`/drafts/${d.id}`}
-            >
-              {d.data.classTopic || "Clase por completar"}
-            </Link>
-            <Button
-              size="sm"
-              nativeButton={false}
-              render={<Link to={`/drafts/${d.id}`} />}
-            >
-              Revisar borrador
-            </Button>
-          </div>
-          {d.id === draftId && d.questions.length > 0 && (
-            <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-muted-foreground">
-              {d.questions.map((q, i) => (
-                <li key={i}>{q}</li>
-              ))}
-            </ul>
-          )}
-          {d.id === draftId ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="self-start"
-              onClick={() => setDraftId(null)}
-            >
-              Hablar de otra cosa
-            </Button>
-          ) : (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="self-start"
-              onClick={() => setDraftId(d.id)}
-            >
-              Responder preguntas acá
-            </Button>
-          )}
+            .map((p) => (
+              <ProposalCard key={p.id} proposal={p} />
+            ))}
+          {pendingDrafts.map((d) => (
+            <div key={d.id} className="rounded-3xl bg-surface px-4 py-2">
+              <Disclosure
+                summary={
+                  <span className="font-medium text-foreground break-words">
+                    {d.data.classTopic || "Clase por completar"}
+                  </span>
+                }
+              >
+                <div className="flex flex-col items-start gap-3 pb-2">
+                  <Button
+                    size="sm"
+                    nativeButton={false}
+                    render={<Link to={`/drafts/${d.id}`} />}
+                  >
+                    Revisar borrador
+                  </Button>
+                  {d.id === draftId && d.questions.length > 0 && (
+                    <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-muted-foreground">
+                      {d.questions.map((q, i) => (
+                        <li key={i}>{q}</li>
+                      ))}
+                    </ul>
+                  )}
+                  {d.id === draftId ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="self-start"
+                      onClick={() => setDraftId(null)}
+                    >
+                      Hablar de otra cosa
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="self-start"
+                      onClick={() => setDraftId(d.id)}
+                    >
+                      Responder preguntas acá
+                    </Button>
+                  )}
+                </div>
+              </Disclosure>
+            </div>
+          ))}
         </div>
-      ))}
+      </div>
       <ErrorNotice error={send.error} />
-      <Composer
-        value={input}
-        onChange={(text) => {
-          setInput(text);
-          if (send.isError) {
-            setRequestId(crypto.randomUUID());
-            send.reset();
+      <div className="shrink-0 bg-background">
+        <Composer
+          value={input}
+          onChange={(text) => {
+            setInput(text);
+            if (send.isError) {
+              setRequestId(crypto.randomUUID());
+              send.reset();
+            }
+          }}
+          onSend={() => send.mutate()}
+          busy={send.isPending}
+          placeholder={
+            selected
+              ? "Respondé lo que recuerdes…"
+              : mode === "log"
+                ? "Hoy practicamos… Me costó…"
+                : "Escribí o grabá un audio…"
           }
-        }}
-        onSend={() => send.mutate()}
-        busy={send.isPending}
-        placeholder={
-          selected
-            ? "Respondé lo que recuerdes…"
-            : mode === "log"
-              ? "Hoy practicamos… Me costó…"
-              : "Escribí o grabá un audio…"
-        }
-      />
+        />
+      </div>
     </div>
   );
 }

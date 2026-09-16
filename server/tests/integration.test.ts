@@ -10,7 +10,7 @@ import { trainingRoute } from "../src/routes/training.ts";
 import { createChatRoute } from "../src/routes/chat.ts";
 import { techniquesRoute } from "../src/routes/techniques.ts";
 import { sessionsRoute } from "../src/routes/sessions.ts";
-import { audioRoute } from "../src/routes/audio.ts";
+import { audioRoute, createAudioRoute } from "../src/routes/audio.ts";
 import type { AppEnv } from "../src/middleware.ts";
 import type { DraftData } from "../../src/lib/training.ts";
 
@@ -401,6 +401,40 @@ test("audio rejects empty, non-audio and oversized requests before contacting pr
     ).status,
     413,
   );
+});
+
+test("audio transcribes via the injected model and rejects empty transcripts", async () => {
+  const { MockLanguageModelV4 } = await import("ai/test");
+  let calls = 0;
+  const model = new MockLanguageModelV4({
+    doGenerate: async () => {
+      calls++;
+      return {
+        content: [{ type: "text", text: calls === 1 ? "  En la clase practicamos media guardia.  " : "" }],
+        finishReason: { unified: "stop", raw: "stop" },
+        usage: { inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 }, outputTokens: { total: 1, text: 1, reasoning: 0 } },
+        warnings: [],
+      };
+    },
+  });
+  const route = createAudioRoute(model);
+  const a = new Hono<AppEnv>();
+  a.use("*", async (c, next) => {
+    c.set("userId", owner);
+    await next();
+  });
+  a.route("/audio", route);
+  const send = () => {
+    const form = new FormData();
+    form.append("audio", new Blob([new Uint8Array(8)], { type: "audio/webm" }), "a.webm");
+    return form;
+  };
+  const ok = await a.request("/audio", { method: "POST", body: send() });
+  assert.equal(ok.status, 200);
+  assert.equal((await ok.json()).text, "En la clase practicamos media guardia.");
+  calls = 1;
+  const empty = await a.request("/audio", { method: "POST", body: send() });
+  assert.equal(empty.status, 422);
 });
 
 test("AI SDK executes historical retrieval across old chats without leaking another user", async () => {
