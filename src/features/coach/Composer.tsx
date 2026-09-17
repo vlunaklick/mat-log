@@ -26,9 +26,7 @@ export function Composer({
   const canSend = !!value.trim() && !locked;
   const status =
     audio.recording
-      ? audio.live
-        ? audio.live
-        : "Escuchando…"
+      ? audio.dictation ? "Dictando…" : "Grabando…"
       : audio.busy
         ? "Transcribiendo…"
         : busy
@@ -45,7 +43,7 @@ export function Composer({
         </FieldLabel>
         <Textarea
           id="coach-entry"
-          value={value}
+          value={audio.live ? [value, audio.live].filter(Boolean).join("\n") : value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           className="max-h-72 min-h-14 resize-none bg-background"

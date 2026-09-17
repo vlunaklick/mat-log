@@ -1,22 +1,12 @@
 import { useEffect, useRef, useState } from "react";
+import { bindDictation, type DictationRecognition } from "./dictation";
 const MAX_BYTES = 15 * 1024 * 1024;
 
-type SpeechRecognitionLike = {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  start(): void;
-  stop(): void;
-  onresult: ((event: SpeechRecognitionEvent) => void) | null;
-  onerror: ((event: Event & { error?: string }) => void) | null;
-  onend: (() => void) | null;
-};
-
 /** Chrome/Edge/Safari ship dictation under vendor prefixes; TypeScript only knows the DOM stub. */
-function getDictation(): (new () => SpeechRecognitionLike) | null {
+function getDictation(): (new () => DictationRecognition) | null {
   const w = window as unknown as Record<string, unknown>;
   const ctor = (w.SpeechRecognition ?? w.webkitSpeechRecognition) as
-    | (new () => SpeechRecognitionLike)
+    | (new () => DictationRecognition)
     | undefined;
   return ctor ?? null;
 }
@@ -26,8 +16,8 @@ export function useAudio(onText: (text: string) => void) {
   const recorder = useRef<MediaRecorder | null>(null);
   const stream = useRef<MediaStream | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const recognition = useRef<SpeechRecognitionLike | null>(null);
-  const dictationBase = useRef("");
+  const recognition = useRef<DictationRecognition | null>(null);
+  const disposeDictation = useRef<(() => void) | null>(null);
   const mounted = useRef(true);
   const [recording, setRecording] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -38,8 +28,9 @@ export function useAudio(onText: (text: string) => void) {
     mounted.current = true;
     return () => {
       mounted.current = false;
+      disposeDictation.current?.();
       try {
-        recognition.current?.stop();
+        recognition.current?.abort();
       } catch {
         /* already stopped */
       }
@@ -79,58 +70,44 @@ export function useAudio(onText: (text: string) => void) {
     setError(null);
     setBusy(true);
     try {
-      if (
-        !navigator.mediaDevices?.getUserMedia ||
-        typeof MediaRecorder === "undefined"
-      )
-        throw new Error(
-          "Este navegador no permite grabar. Podés adjuntar un audio o escribir.",
-        );
       const Dictation = getDictation();
       if (Dictation) {
         const rec = new Dictation();
         rec.lang = navigator.language || "es-AR";
         rec.continuous = true;
         rec.interimResults = true;
-        dictationBase.current = "";
-        rec.onresult = (event) => {
-          let final = "",
-            interim = "";
-          for (let i = event.resultIndex; i < event.results.length; i++) {
-            const chunk = event.results[i][0].transcript;
-            if (event.results[i].isFinal) final += chunk;
-            else interim += chunk;
-          }
-          if (final) dictationBase.current = `${dictationBase.current}${final} `;
-          if (mounted.current)
-            setLive(
-              `${dictationBase.current}${interim}`.trimStart() || null,
-            );
-        };
-        rec.onerror = (event) => {
-          if (event.error === "no-speech" || event.error === "aborted") return;
-          setError(
-            event.error === "not-allowed"
-              ? "No dimos permiso al micrófono. Activalo para el sitio."
-              : "El dictado se interrumpió. Probá de nuevo.",
-          );
-          setRecording(false);
-          setLive(null);
-        };
-        rec.onend = () => {
-          if (mounted.current && recognition.current === rec) {
+        disposeDictation.current?.();
+        setLive(null);
+        setAudio(null);
+        recognition.current = rec;
+        disposeDictation.current = bindDictation(rec, {
+          preview: (text) => {
+            if (mounted.current && recognition.current === rec) setLive(text);
+          },
+          error: (message) => {
+            if (mounted.current && recognition.current === rec) setError(message);
+          },
+          finish: (text) => {
+            if (!mounted.current || recognition.current !== rec) return;
+            disposeDictation.current?.();
+            disposeDictation.current = null;
+            recognition.current = null;
+            if (timer.current) clearTimeout(timer.current);
+            timer.current = null;
+            try { rec.abort(); } catch {}
             setRecording(false);
             setLive(null);
-            const text = dictationBase.current.trim();
-            dictationBase.current = "";
             if (text) onText(text);
-          }
-        };
-        recognition.current = rec;
-        rec.start();
+          },
+        });
         setRecording(true);
+        rec.start();
+        if (recognition.current === rec)
+          timer.current = setTimeout(() => rec.stop(), 5 * 60 * 1000);
         return;
       }
+      if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined")
+        throw new Error("Este navegador no permite grabar. Podés adjuntar un audio o escribir.");
       const media = await navigator.mediaDevices.getUserMedia({ audio: true });
       if (!mounted.current) {
         media.getTracks().forEach((t) => t.stop());
@@ -175,8 +152,17 @@ export function useAudio(onText: (text: string) => void) {
         5 * 60 * 1000,
       );
     } catch (e) {
+      disposeDictation.current?.();
+      disposeDictation.current = null;
+      try { recognition.current?.abort(); } catch {}
+      recognition.current = null;
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = null;
       stream.current?.getTracks().forEach((t) => t.stop());
-      setError(e instanceof Error ? e.message : String(e));
+      if (mounted.current) {
+        setRecording(false);
+        setError(e instanceof Error ? e.message : String(e));
+      }
     } finally {
       if (mounted.current) setBusy(false);
     }
