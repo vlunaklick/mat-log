@@ -1,6 +1,6 @@
 import { TechniqueJourney } from "../training/TechniqueJourney";
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { useTechniqueMutations, useTechniques } from "@/lib/queries";
@@ -51,7 +51,14 @@ export default function TechniqueEditorPage() {
     return (
       <div className="mx-auto flex w-full max-w-[720px] flex-col gap-8">
         <PageHeader title="Técnica" back={{ to: "/techniques", label: "Técnicas" }} />
-        <Blank title="No encontramos esta técnica" />
+        <Blank
+          title="No encontramos esta técnica"
+          action={
+            <Button variant="outline" nativeButton={false} render={<Link to="/techniques" />}>
+              Volver a técnicas
+            </Button>
+          }
+        />
       </div>
     );
   }

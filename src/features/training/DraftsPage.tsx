@@ -28,7 +28,16 @@ export default function DraftsPage() {
       {drafts.isPending ? (
         <Loading />
       ) : !sorted?.length ? (
-        <Blank title="No tenés borradores" />
+        <Blank
+          title="No tenés borradores"
+          action={
+            <Button nativeButton={false} render={<Link to="/coach?mode=log" />}>
+              Contar mi clase
+            </Button>
+          }
+        >
+          Aparecen acá cuando le contás una clase al coach.
+        </Blank>
       ) : (
         <div className="flex flex-col">
           {sorted.map((d) => (

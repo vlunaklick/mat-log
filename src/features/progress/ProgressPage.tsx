@@ -145,7 +145,7 @@ export default function ProgressPage() {
             </span>
           </CardHeader>
           <CardContent>
-            <svg viewBox="0 0 240 100" className="mt-2 h-28 w-full" preserveAspectRatio="none">
+            <svg viewBox="0 0 240 100" className="mt-2 h-28 w-full" preserveAspectRatio="none" role="img" aria-label={`Clases por semana en las últimas 12 semanas. Meta: ${weeklyGoal} por semana. Esta semana: ${stats.weekly[stats.weekly.length - 1].count}.`}>
               <line
                 x1={0}
                 x2={240}
@@ -235,7 +235,11 @@ export default function ProgressPage() {
               <p className="text-sm text-muted-foreground">Todavía no registraste rolls.</p>
             ) : (
               <>
-                <div className="flex h-4 overflow-hidden rounded-full bg-surface">
+                <div
+                  className="flex h-4 overflow-hidden rounded-full bg-surface"
+                  role="img"
+                  aria-label={`Resultados de ${totalOutcomes} rolls: ${OUTCOME_ORDER.filter((k) => stats.outcomes[k] > 0).map((k) => `${OUTCOME_LABELS[k]} ${stats.outcomes[k]}`).join(", ")}.`}
+                >
                   {OUTCOME_ORDER.map((k) =>
                     stats.outcomes[k] > 0 ? (
                       <div
@@ -308,7 +312,11 @@ export default function ProgressPage() {
                     <p className="text-xs text-muted-foreground">No-gi ({nogiPct}%)</p>
                   </div>
                 </div>
-                <div className="mt-3 flex h-2 overflow-hidden rounded-full bg-surface">
+                <div
+                  className="mt-3 flex h-2 overflow-hidden rounded-full bg-surface"
+                  role="img"
+                  aria-label={`Reparto de horas: Gi ${giPct} por ciento, no-gi ${nogiPct} por ciento.`}
+                >
                   <div style={{ width: `${giPct}%`, backgroundColor: "var(--chart-1)" }} />
                   <div style={{ width: `${nogiPct}%`, backgroundColor: "var(--chart-3)" }} />
                 </div>

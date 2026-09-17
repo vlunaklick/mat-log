@@ -1,4 +1,4 @@
-import { useDeferredValue, useState } from "react";
+import { useDeferredValue, useEffect, useRef, useState } from "react";
 import {
   Link,
   useNavigate,
@@ -34,6 +34,12 @@ const SUGGESTIONS = [
   "¿En qué me enfoco la próxima clase?",
   "¿Dónde me estoy trabando en los rolls?",
   "Revisá mi semana",
+];
+
+const LOG_STARTERS = [
+  "Hoy practicamos…",
+  "Me costó…",
+  "En los rolls…",
 ];
 
 export default function CoachPage() {
@@ -193,12 +199,22 @@ function ConversationView({ id }: { id?: string }) {
       (d) => d.conversationId === createdId && d.status === "draft",
     ) ?? [];
   const selected = pendingDrafts.find((d) => d.id === draftId);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const messageCount = messages.data?.length ?? 0;
+  // Follow the conversation as it grows; instant jump when less motion is asked for.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollTo({ top: el.scrollHeight, behavior: reduce ? "auto" : "smooth" });
+  }, [messageCount, send.isPending]);
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div
         role="region"
         aria-label="Conversación con el coach"
         tabIndex={0}
+        ref={scrollRef}
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1"
       >
         <div className="flex flex-col gap-4 pb-2">
@@ -217,10 +233,9 @@ function ConversationView({ id }: { id?: string }) {
                       : "¿En qué te ayudo?"
               }
               action={
-                mode === "chat" &&
                 !input && (
                   <div className="flex flex-wrap justify-center gap-2">
-                    {SUGGESTIONS.map((text) => (
+                    {(mode === "log" ? LOG_STARTERS : SUGGESTIONS).map((text) => (
                       <Button
                         key={text}
                         size="sm"
@@ -242,7 +257,6 @@ function ConversationView({ id }: { id?: string }) {
             {messages.data?.map((m) => (
               <div
                 key={m.id}
-                title={formatTimestamp(m.createdAt)}
                 className={
                   m.role === "user"
                     ? "ml-auto max-w-[85%] rounded-3xl rounded-br-md bg-primary px-4 py-3 text-primary-foreground"
@@ -252,6 +266,12 @@ function ConversationView({ id }: { id?: string }) {
                 <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
                   {m.content}
                 </p>
+                <time
+                  dateTime={new Date(m.createdAt).toISOString()}
+                  className="sr-only"
+                >
+                  {formatTimestamp(m.createdAt)}
+                </time>
               </div>
             ))}
           </div>

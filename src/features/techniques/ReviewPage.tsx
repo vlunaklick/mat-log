@@ -44,7 +44,16 @@ export default function ReviewPage() {
     return (
       <div className="mx-auto flex w-full max-w-[560px] flex-col gap-6">
         <PageHeader title="Repaso" back={BACK} />
-        <Blank title="No hay técnicas para repasar" />
+        <Blank
+          title="No hay técnicas para repasar"
+          action={
+            <Button variant="outline" nativeButton={false} render={<Link to="/techniques" />}>
+              Ver técnicas
+            </Button>
+          }
+        >
+          Volvé después de tu próxima clase.
+        </Blank>
       </div>
     );
   }

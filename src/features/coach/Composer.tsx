@@ -22,7 +22,10 @@ export function Composer({
   const audio = useAudio((text) =>
     onChange(value ? `${value}\n${text}` : text),
   );
-  const locked = busy || audio.busy || audio.recording;
+  // Typing stays available while the coach thinks so a follow-up can be queued;
+  // only recording and transcribing lock the field.
+  const audioLocked = audio.busy || audio.recording;
+  const locked = busy || audioLocked;
   const canSend = !!value.trim() && !locked;
   const status =
     audio.recording
@@ -47,8 +50,9 @@ export function Composer({
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           className="max-h-72 min-h-14 resize-none bg-background"
-          disabled={locked}
+          disabled={audioLocked}
           maxLength={20000}
+          title="Cmd o Ctrl + Enter para enviar"
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && canSend) {
               e.preventDefault();

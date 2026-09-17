@@ -48,6 +48,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   const isCoach = pathname === "/coach" || pathname.startsWith("/coach/");
   return (
     <SidebarProvider className={isCoach ? "h-dvh min-h-0 overflow-hidden" : undefined}>
+      <a
+        href="#contenido"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded-full focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:text-primary-foreground"
+      >
+        Saltar al contenido
+      </a>
       <Sidebar collapsible="icon" className="hidden md:flex">
         <SidebarHeader className="py-4">
           <Wordmark />
@@ -80,7 +86,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </SidebarFooter>
       </Sidebar>
       <SidebarInset className={cn("bg-background", isCoach && "min-h-0 min-w-0")}>
-        <main className={cn("mx-auto w-full max-w-4xl px-4 pt-4 md:px-8 md:pt-10", isCoach ? "flex min-h-0 flex-1 flex-col pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-4" : "pb-28 md:pb-16")}>{children}</main>
+        <main id="contenido" tabIndex={-1} className={cn("mx-auto w-full max-w-4xl px-4 pt-4 outline-none md:px-8 md:pt-10", isCoach ? "flex min-h-0 flex-1 flex-col pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-4" : "pb-28 md:pb-16")}>{children}</main>
         <MobileNav pathname={pathname} />
       </SidebarInset>
     </SidebarProvider>
@@ -89,7 +95,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
 function MobileNav({ pathname }: { pathname: string }) {
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-3 pb-[max(env(safe-area-inset-bottom),12px)] md:hidden pointer-events-none">
+    <nav aria-label="Navegación principal" className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-3 pb-[max(env(safe-area-inset-bottom),12px)] md:hidden pointer-events-none">
       <div className="pointer-events-auto flex w-full max-w-lg items-center justify-between gap-1 rounded-full bg-surface p-1">
         {NAV.filter((item) => item.mobile || item.match(pathname)).map((item) => {
           const active = item.match(pathname);

@@ -114,7 +114,7 @@ export default function TodayPage() {
       {pending.length > 0 && (
         <Link
           to={pending.length === 1 ? `/drafts/${pending[0].id}` : "/drafts"}
-          className="-mt-4 flex min-h-12 items-center gap-3 rounded-full bg-surface py-2 pr-4 pl-2 transition-colors hover:bg-accent"
+          className="flex min-h-12 items-center gap-3 rounded-full bg-surface py-2 pr-4 pl-2 transition-colors hover:bg-accent"
         >
           <span className="flex size-8 items-center justify-center rounded-full bg-brand text-sm font-semibold text-brand-foreground tabular-nums">
             {pending.length}

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Search } from "lucide-react";
+import { History, Search, X } from "lucide-react";
 import { useSessions } from "@/lib/queries";
 import { techniqueProgress, STAGE_LABELS } from "@/lib/training";
 import { useTechniques } from "@/lib/queries";
@@ -67,9 +67,12 @@ export default function TechniquesPage() {
       )}
 
       {dueCount > 0 && (
-        <div className="rounded-3xl bg-surface p-4 flex items-center justify-between">
-          <p className="text-sm">
-            <span className="text-brand font-semibold">{dueCount}</span> para repasar
+        <div className="rounded-3xl bg-surface p-4 flex items-center justify-between gap-3">
+          <p className="flex min-h-11 items-center gap-2 text-sm">
+            <History className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <span>
+              <span className="text-brand font-semibold">{dueCount}</span> para repasar
+            </span>
           </p>
           <Button variant="outline" size="sm" nativeButton={false} render={<Link to="/review" />}>
             Repasar
@@ -91,9 +94,23 @@ export default function TechniquesPage() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
-            <InputGroupAddon>
-              <Search data-icon="inline-start" />
-            </InputGroupAddon>
+            {query ? (
+              <InputGroupAddon align="inline-end">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Limpiar búsqueda"
+                  onClick={() => setQuery("")}
+                >
+                  <X />
+                </Button>
+              </InputGroupAddon>
+            ) : (
+              <InputGroupAddon>
+                <Search data-icon="inline-start" />
+              </InputGroupAddon>
+            )}
           </InputGroup>
         </div>
 
@@ -153,6 +170,9 @@ export default function TechniquesPage() {
         )
       ) : (
         <div className="flex flex-col gap-5">
+          <p className="text-sm text-muted-foreground" role="status">
+            {filtered.length === 1 ? "1 técnica" : `${filtered.length} técnicas`}
+          </p>
           {groups.map((g) => (
             <div key={g.position} className="flex flex-col gap-1">
               <h2 className="text-label text-muted-foreground">{POSITION_LABELS[g.position]}</h2>

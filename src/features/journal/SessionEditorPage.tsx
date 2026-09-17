@@ -1,7 +1,7 @@
 import { EvidenceEditor } from "../training/EvidenceEditor";
 import { Blank } from "../training/shared";
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { X } from "lucide-react";
 import { toast } from "sonner";
 import { useSessionMutations, useSessions, useTechniques } from "@/lib/queries";
@@ -230,6 +230,11 @@ function SessionForm({ initial }: { initial: Session }) {
             ))}
           </div>
         )}
+        {techniqueQuery.trim() && techniqueMatches.length === 0 && (
+          <p className="text-sm text-muted-foreground">
+            Sin coincidencias. Creá la técnica desde Técnicas y volvé.
+          </p>
+        )}
       </div>
 
       <EvidenceEditor value={evidence.filter(e => techniqueIds.includes(e.techniqueId))} onChange={setEvidence} techniques={techniques ?? []} />
@@ -416,7 +421,14 @@ export default function SessionEditorPage() {
     return (
       <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6">
         <PageHeader title="Clase" back={{ to: "/journal", label: "Diario" }} />
-        <Blank title="No encontramos esta clase" />
+        <Blank
+          title="No encontramos esta clase"
+          action={
+            <Button variant="outline" nativeButton={false} render={<Link to="/journal" />}>
+              Volver al diario
+            </Button>
+          }
+        />
       </div>
     );
   }

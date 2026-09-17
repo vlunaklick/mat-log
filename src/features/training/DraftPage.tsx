@@ -3,8 +3,10 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import type { Draft, DraftData } from "@/lib/training";
 import { STAGE_LABELS } from "@/lib/training";
-import { POSITIONS, TECHNIQUE_TYPES } from "@/lib/types";
+import { POSITIONS, TECHNIQUE_TYPES, type Position, type RollOutcome } from "@/lib/types";
+import type { Belt } from "@/lib/training";
 import {
+  BELT_LABELS,
   OUTCOME_LABELS,
   POSITION_LABELS,
   TECHNIQUE_TYPE_LABELS,
@@ -17,10 +19,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ErrorNotice, Loading } from "./shared";
 import { ConfirmDelete } from "./confirm-delete";
 const numberOrNull = (s: string) => (s === "" ? null : Number(s));
+const BELTS = ["white", "blue", "purple", "brown", "black"] as const;
+const BELT_ITEMS = { "": "Sin especificar", ...BELT_LABELS };
+const STUCK_ITEMS = { "": "Ninguna", ...POSITION_LABELS };
+const OUTCOMES: RollOutcome[] = ["dominated", "won", "even", "lost", "survived", "unknown"];
 export default function DraftPage() {
   const { id = "" } = useParams();
   const draft = useDraft(id);
@@ -39,6 +46,8 @@ function DraftEditor({ initial }: { initial: Draft }) {
   const busy = actions.saveDraft.isPending || actions.confirm.isPending;
   const patch = (p: Partial<DraftData>) =>
     setDraft((d) => ({ ...d, data: { ...d.data, ...p } }));
+  const updateRoll = (i: number, p: Partial<DraftData["rolls"][number]>) =>
+    patch({ rolls: draft.data.rolls.map((x, j) => (i === j ? { ...x, ...p } : x)) });
   const patchTechnique = (
     i: number,
     p: Partial<DraftData["techniques"][number]>,
@@ -252,7 +261,7 @@ function DraftEditor({ initial }: { initial: Draft }) {
                   {t.name || "Técnica"}
                 </span>
                 <span>
-                  · {STAGE_LABELS[t.stage]} · {POSITION_LABELS[t.position]}
+                  · {STAGE_LABELS[t.stage]} · {label(POSITION_LABELS, t.position)}
                 </span>
               </span>
             }
@@ -427,40 +436,79 @@ function DraftEditor({ initial }: { initial: Draft }) {
             summary={`Roll ${i + 1} · ${r.partnerName || "Sin nombre"} · ${label(OUTCOME_LABELS, r.outcome)}`}
           >
             <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor={`partner-${i}`}>Compañero</FieldLabel>
-                <Input
-                  id={`partner-${i}`}
-                  value={r.partnerName ?? ""}
-                  onChange={(e) =>
-                    patch({
-                      rolls: draft.data.rolls.map((x, j) =>
-                        i === j ? { ...x, partnerName: e.target.value } : x,
-                      ),
-                    })
-                  }
-                />
-              </Field>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field>
+                  <FieldLabel htmlFor={`partner-${i}`}>Compañero</FieldLabel>
+                  <Input
+                    id={`partner-${i}`}
+                    value={r.partnerName ?? ""}
+                    onChange={(e) => updateRoll(i, { partnerName: e.target.value })}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor={`draft-roll-belt-${i}`}>Cinturón</FieldLabel>
+                  <Select
+                    items={BELT_ITEMS}
+                    value={r.partnerBelt ?? ""}
+                    onValueChange={(v) => updateRoll(i, { partnerBelt: ((v as string) || undefined) as Belt | undefined })}
+                  >
+                    <SelectTrigger id={`draft-roll-belt-${i}`} className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">{BELT_ITEMS[""]}</SelectItem>
+                      {BELTS.map((b) => (
+                        <SelectItem key={b} value={b}>
+                          {BELT_LABELS[b]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor={`draft-roll-outcome-${i}`}>Resultado</FieldLabel>
+                  <Select items={OUTCOME_LABELS} value={r.outcome} onValueChange={(v) => updateRoll(i, { outcome: v as RollOutcome })}>
+                    <SelectTrigger id={`draft-roll-outcome-${i}`} className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {OUTCOMES.map((o) => (
+                        <SelectItem key={o} value={o}>
+                          {OUTCOME_LABELS[o]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor={`draft-roll-stuck-${i}`}>Dónde te costó</FieldLabel>
+                  <Select
+                    items={STUCK_ITEMS}
+                    value={r.stuckIn ?? ""}
+                    onValueChange={(v) => updateRoll(i, { stuckIn: ((v as string) || undefined) as Position | undefined })}
+                  >
+                    <SelectTrigger id={`draft-roll-stuck-${i}`} className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">{STUCK_ITEMS[""]}</SelectItem>
+                      {POSITIONS.map((p) => (
+                        <SelectItem key={p} value={p}>
+                          {POSITION_LABELS[p]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
               <Field>
                 <FieldLabel htmlFor={`roll-notes-${i}`}>Notas</FieldLabel>
                 <Textarea
                   id={`roll-notes-${i}`}
                   value={r.notes ?? ""}
-                  onChange={(e) =>
-                    patch({
-                      rolls: draft.data.rolls.map((x, j) =>
-                        i === j ? { ...x, notes: e.target.value } : x,
-                      ),
-                    })
-                  }
+                  onChange={(e) => updateRoll(i, { notes: e.target.value })}
                 />
               </Field>
-              <p className="text-sm text-muted-foreground">
-                Resultado: {label(OUTCOME_LABELS, r.outcome)}
-                {r.stuckIn
-                  ? ` · Te costó: ${label(POSITION_LABELS, r.stuckIn)}`
-                  : ""}
-              </p>
               <Button
                 variant="ghost"
                 className="self-start"

@@ -67,14 +67,14 @@ export default function JournalPage() {
         </Alert>
       )}
 
-      <div className="-mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
-        <Link to="/progress" className="text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline">
+      <div className="-mt-2 flex flex-wrap gap-2 text-sm">
+        <Button variant="secondary" size="sm" nativeButton={false} render={<Link to="/progress" />}>
           Ver progreso
-        </Link>
+        </Button>
         {drafts && drafts.length > 0 && (
-          <Link to="/drafts" className="text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline">
+          <Button variant="secondary" size="sm" nativeButton={false} render={<Link to="/drafts" />}>
             Borradores{pendingDrafts > 0 ? ` · ${pendingDrafts} sin confirmar` : ""}
-          </Link>
+          </Button>
         )}
       </div>
 

@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
+import { ArrowRight } from "lucide-react";
 import type { Gameplan, PlanNode, TrainingState } from "@/lib/training";
 import type { Style, Technique } from "@/lib/types";
+import { POSITIONS, type Position } from "@/lib/types";
 import { POSITION_LABELS, STYLE_LABELS, label } from "@/lib/labels";
 import { useTraining, useTrainingActions } from "./queries";
 import { useTechniques, useSessions } from "@/lib/queries";
@@ -14,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Blank, ErrorNotice, Loading, StylePicker } from "./shared";
 export default function GameplanPage() {
   const [params, setParams] = useSearchParams();
@@ -108,7 +111,7 @@ export default function GameplanPage() {
                 return (
                   <li key={n.id}>
                     <button
-                      className={`w-full rounded-3xl p-4 text-left ${isSelected ? "bg-primary text-primary-foreground" : "bg-surface"}`}
+                      className={`min-h-16 w-full rounded-3xl p-4 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring ${isSelected ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-accent"}`}
                       onClick={() => setSelectedId(n.id)}
                       aria-pressed={isSelected}
                     >
@@ -204,11 +207,12 @@ function StepDetailPanel({
               next && (
                 <Button
                   key={id}
-                  className="h-auto justify-start whitespace-normal py-3 text-left"
+                  className="h-auto min-h-11 justify-start whitespace-normal py-3 text-left"
                   variant="outline"
                   onClick={() => onSelect(id)}
                 >
-                  → {label(POSITION_LABELS, next.position)}: {next.action}
+                  <ArrowRight data-icon="inline-start" />
+                  {label(POSITION_LABELS, next.position)}: {next.action}
                 </Button>
               )
             );
@@ -292,13 +296,27 @@ function PlanEditor({
                   <FieldLabel htmlFor={`${n.id}-position`}>
                     Posición
                   </FieldLabel>
-                  <Input
-                    id={`${n.id}-position`}
+                  <Select
+                    items={POSITION_LABELS}
                     value={n.position}
-                    onChange={(e) =>
-                      patch(n.id, { position: e.target.value })
-                    }
-                  />
+                    onValueChange={(v) => patch(n.id, { position: v as string })}
+                  >
+                    <SelectTrigger id={`${n.id}-position`} className="w-full">
+                      <SelectValue placeholder="Elegí una posición" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {POSITIONS.map((p) => (
+                        <SelectItem key={p} value={p}>
+                          {POSITION_LABELS[p]}
+                        </SelectItem>
+                      ))}
+                      {!POSITIONS.includes(n.position as Position) && n.position && (
+                        <SelectItem value={n.position}>
+                          {n.position}
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
                 </Field>
                 <Field>
                   <FieldLabel htmlFor={`${n.id}-action`}>

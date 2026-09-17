@@ -23,11 +23,13 @@ export default function ExplorePage() {
     techniques = useTechniques(),
     actions = useTrainingActions();
   const total = catalog.data?.total ?? 0;
+  // Replace history entries while filtering so typing a search doesn't
+  // trap the back button behind every keystroke.
   const filter = (key: string, value: string) => {
     const next = new URLSearchParams(params);
     next.set(key, value);
     next.delete("offset");
-    setParams(next);
+    setParams(next, { replace: true });
   };
   return (
     <div className="flex flex-col gap-6">
@@ -225,10 +227,13 @@ export default function ExplorePage() {
                 variant="outline"
                 disabled={!offset}
                 onClick={() =>
-                  setParams({
-                    ...Object.fromEntries(params),
-                    offset: String(Math.max(0, offset - 24)),
-                  })
+                  setParams(
+                    {
+                      ...Object.fromEntries(params),
+                      offset: String(Math.max(0, offset - 24)),
+                    },
+                    { replace: true },
+                  )
                 }
               >
                 Anterior
@@ -240,10 +245,13 @@ export default function ExplorePage() {
                 variant="outline"
                 disabled={offset + 24 >= total}
                 onClick={() =>
-                  setParams({
-                    ...Object.fromEntries(params),
-                    offset: String(offset + 24),
-                  })
+                  setParams(
+                    {
+                      ...Object.fromEntries(params),
+                      offset: String(offset + 24),
+                    },
+                    { replace: true },
+                  )
                 }
               >
                 Siguiente

@@ -178,8 +178,22 @@ body {
   font-weight: var(--font-weight-body);
   font-feature-settings: "cv11", "ss01";
 }
+/* Headlines stay on as few balanced lines as possible; body copy avoids orphans. */
+h1, h2, h3 { text-wrap: balance; }
+p, li { text-wrap: pretty; }
+::selection { background: var(--primary); color: var(--primary-foreground); }
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
 .safe-top { padding-top: env(safe-area-inset-top); }
+
+/* WCAG 2.2 AA: never animate for users who ask for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 
 @layer base {
   * { @apply border-border outline-ring/50; }
